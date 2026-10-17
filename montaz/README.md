@@ -25,8 +25,11 @@ Powstaje `film1.json` (timing per słowo). To samo dla filmu 2. Zwykłe `.srt`/`
 1. Wczytaj oba filmy i transkrypcje.
 2. **Kalibracja:** znajdź to samo zdarzenie w obu filmach (klaśnięcie, początek słowa), zatrzymaj klatkę
    (przyciski ±1 klatka) i kliknij „Ustaw M1/M2". Offset = M2 − M1.
-3. Wpisz słowo (szukanie po fragmencie, bez polskich znaków i wielkości liter), wybierz w czyjej transkrypcji
-   szukać, od którego filmu zaczynać i minimalną długość ujęcia. Niechciane trafienia odznacz.
+3. Dodaj jedno lub kilka słów (przycisk „+ dodaj słowo"). Szukanie jest po fragmencie, bez polskich znaków
+   i wielkości liter. Każde słowo ma własne ustawienia: w której transkrypcji szukać oraz **akcję** —
+   „przełącz na drugi film" albo „przejdź na film 1/2". Np. `megalodon` → przełącz, `koniec` → przejdź na film 1.
+   Ustaw też, od którego filmu zaczynać, i minimalną długość ujęcia. Niechciane trafienia odznacz.
+   Trafienia ze wszystkich słów łączą się na jednej osi czasu; akcja „przejdź na film X", gdy już jesteś na X, nic nie zmienia.
 4. „Podgląd montażu" pokazuje dokładnie to, co wyjdzie z renderu.
 5. Skopiuj skrypt / pobierz `render.sh`, uruchom w folderze z oryginalnymi plikami: `bash render.sh`.
    (Nazwy plików w skrypcie = nazwy wczytanych filmów.)

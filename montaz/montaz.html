@@ -38,6 +38,7 @@ tr.hit{cursor:pointer}tr.hit:hover{background:#ffffff0a}
 textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 .mut{color:var(--mut)}.mono{font-family:ui-monospace,Menlo,monospace}
 .mk{display:grid;gap:8px}
+.rule{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -100,11 +101,11 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 </section>
 
 <section>
-<h2>3. Słowo i cięcia</h2>
+<h2>3. Słowa i cięcia</h2>
+<div id="rules"></div>
+<div class="row" style="margin:6px 0 12px"><button id="addrule">+ dodaj słowo</button>
+ <span class="mut">Każde słowo ma własną akcję: przełącz obraz na drugi film albo przejdź na konkretny film.</span></div>
 <div class="row">
- <label>słowo (fragment)</label><input type="text" id="q" value="megalodon" style="width:160px">
- <label>szukaj w transkrypcji</label>
- <select id="qsrc"><option value="1">filmu 1</option><option value="2">filmu 2</option><option value="3">obu</option></select>
  <label>start od</label>
  <select id="start"><option value="1">filmu 1</option><option value="2">filmu 2</option></select>
  <label>min. długość ujęcia (s)</label><input type="number" id="minshot" value="1" min="0" step="0.1" style="width:70px">
@@ -174,16 +175,28 @@ function parseTranscript(txt){
   return parseSubs(txt);
 }
 // trafienia w czasie globalnym (= czas filmu 1); offset = M2 - M1
-function findHits(words,q,src,offset){
+function findHits(words,q,src,offset,rule=0,act='toggle'){
   const nq=norm(q);if(!nq)return[];
-  return words.filter(w=>norm(w.text).includes(nq)).map(w=>({src,t:src===1?w.t0:w.t0-offset,text:w.text}));
+  return words.filter(w=>norm(w.text).includes(nq)).map(w=>({src,t:src===1?w.t0:w.t0-offset,text:w.text,rule,act,q}));
+}
+// reguły: [{q,qsrc:'1'|'2'|'3',act:'toggle'|'1'|'2'}] -> trafienia z obu transkrypcji
+function findAllHits(rules,w1,w2,offset){
+  const hits=[];
+  rules.forEach((r,i)=>{
+    const act=r.act==='1'?1:r.act==='2'?2:'toggle';
+    if(r.qsrc!=='2')hits.push(...findHits(w1,r.q,1,offset,i,act));
+    if(r.qsrc!=='1')hits.push(...findHits(w2,r.q,2,offset,i,act));
+  });
+  return hits.sort((a,b)=>a.t-b.t);
 }
 function buildSegments(hits,{minShot,startSrc,inT,outT}){
   const hs=[...hits].sort((a,b)=>a.t-b.t);const segs=[];let cur=startSrc,start=inT;
   for(const h of hs){
     if(h.t<=inT||h.t>=outT)continue;
+    const next=(h.act===1||h.act===2)?h.act:(cur===1?2:1);
+    if(next===cur)continue;
     if(h.t-start<minShot)continue;
-    segs.push({src:cur,a:start,b:h.t});cur=cur===1?2:1;start=h.t;
+    segs.push({src:cur,a:start,b:h.t});cur=next;start=h.t;
   }
   if(outT-start>1e-4){
     if(outT-start<minShot&&segs.length)segs[segs.length-1].b=outT;
@@ -220,10 +233,10 @@ function genEDL(segs,o){
 
 const $=id=>document.getElementById(id);
 const v1=$('v1'),v2=$('v2');
-const S={w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
+const S={rules:[{q:'megalodon',qsrc:'1',act:'toggle'}],w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
 const fmt=t=>{const s=Math.abs(t);return (t<0?'-':'')+Math.floor(s/60)+':'+(s%60).toFixed(2).padStart(5,'0')};
 const offset=()=>S.m2-S.m1;
-const hitKey=h=>h.src+'@'+h.t.toFixed(3);
+const hitKey=h=>h.rule+':'+h.src+'@'+h.t.toFixed(3);
 
 function loadVideo(k,file){
   const v=k===1?v1:v2;v.src=URL.createObjectURL(file);S['f'+k]=file.name;
@@ -301,10 +314,7 @@ $('seek').oninput=()=>{const was=S.playing;if(was)stopPlay();seekTo(+$('seek').v
 // wyszukiwanie i oś
 function recompute(){
   const o=offset(),inT=+$('tin').value||0,outT=+$('tout').value||0;
-  let hits=[];const qs=$('qsrc').value,qq=$('q').value;
-  if(qs!=='2')hits.push(...findHits(S.w1,qq,1,o));
-  if(qs!=='1')hits.push(...findHits(S.w2,qq,2,o));
-  hits.sort((a,b)=>a.t-b.t);S.hits=hits;
+  const hits=findAllHits(S.rules,S.w1,S.w2,o);S.hits=hits;
   const active=hits.filter(h=>!S.off.has(hitKey(h)));
   S.segs=outT>inT?buildSegments(active,{minShot:+$('minshot').value||0,startSrc:+$('start').value,inT,outT}):[];
   renderHits(inT,outT);renderTL(inT,outT);renderExport();
@@ -312,13 +322,32 @@ function recompute(){
   const used=S.segs.length?S.segs.length-1:0;
   $('stat').textContent=`Trafień: ${hits.length} (zaznaczonych: ${active.length}) · cięć: ${used} · ujęć: ${S.segs.length} · długość: ${fmt(Math.max(0,outT-inT))}`;
 }
-['q','qsrc','start','minshot'].forEach(id=>$(id).oninput=recompute);
+['start','minshot'].forEach(id=>$(id).oninput=recompute);
+function renderRules(){
+  const box=$('rules');box.innerHTML='';
+  S.rules.forEach((r,i)=>{
+    const d=document.createElement('div');d.className='rule';
+    d.innerHTML=`<input type="text" style="width:170px" placeholder="słowo (fragment)"> <label>szukaj w</label>
+      <select class="qs"><option value="1">filmie 1</option><option value="2">filmie 2</option><option value="3">obu</option></select>
+      <label>akcja</label>
+      <select class="ac"><option value="toggle">przełącz na drugi film</option><option value="1">przejdź na film 1</option><option value="2">przejdź na film 2</option></select>
+      <button class="rm" title="usuń">✕</button>`;
+    const inp=d.querySelector('input'),qs=d.querySelector('.qs'),ac=d.querySelector('.ac');
+    inp.value=r.q;qs.value=r.qsrc;ac.value=r.act;
+    inp.oninput=()=>{r.q=inp.value;recompute()};
+    qs.onchange=()=>{r.qsrc=qs.value;recompute()};
+    ac.onchange=()=>{r.act=ac.value;recompute()};
+    d.querySelector('.rm').onclick=()=>{S.rules.splice(i,1);renderRules();recompute()};
+    box.appendChild(d);
+  });
+}
+$('addrule').onclick=()=>{S.rules.push({q:'',qsrc:'1',act:'toggle'});renderRules();recompute()};
 function renderHits(inT,outT){
-  const tb=$('hits');tb.innerHTML='<tr><th></th><th>źródło</th><th>czas</th><th>słowo</th></tr>';
+  const tb=$('hits');tb.innerHTML='<tr><th></th><th>źródło</th><th>czas</th><th>słowo</th><th>akcja</th></tr>';
   S.hits.forEach(h=>{
     const tr=document.createElement('tr');tr.className='hit';
     const out=h.t<=inT||h.t>=outT;
-    tr.innerHTML=`<td><input type="checkbox" ${S.off.has(hitKey(h))?'':'checked'}></td><td style="color:var(--c${h.src})">film ${h.src}</td><td class="mono">${fmt(h.t)}${out?' <span class="mut">(poza zakresem)</span>':''}</td><td>${h.text.replace(/</g,'&lt;')}</td>`;
+    tr.innerHTML=`<td><input type="checkbox" ${S.off.has(hitKey(h))?'':'checked'}></td><td style="color:var(--c${h.src})">film ${h.src}</td><td class="mono">${fmt(h.t)}${out?' <span class="mut">(poza zakresem)</span>':''}</td><td>${h.text.replace(/</g,'&lt;')}</td><td class="mut">${h.act==='toggle'?'przełącz':'→ film '+h.act}</td>`;
     tr.querySelector('input').onclick=e=>{e.stopPropagation();const k=hitKey(h);e.target.checked?S.off.delete(k):S.off.add(k);recompute()};
     tr.onclick=()=>{if(S.mode!=='mon'){document.querySelector('[name=mode][value=mon]').checked=true;setMode('mon')}seekTo(Math.max(inT,h.t-1.5))};
     tb.appendChild(tr);
@@ -343,15 +372,16 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,q:$('q').value,qsrc:$('qsrc').value,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
-  for(const k of['q','qsrc','start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
+  S.rules=p.rules||(p.q!=null?[{q:p.q,qsrc:p.qsrc||'1',act:'toggle'}]:S.rules);renderRules();
+  for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
   recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo i transkrypcje (nazwy w projekcie: '+p.f1+', '+p.f2+').');
 };
-setMode('cal');recompute();
+renderRules();setMode('cal');recompute();
 </script>
 </body>
 </html>
