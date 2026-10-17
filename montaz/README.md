@@ -42,6 +42,13 @@ Powstaje `film1.json` (timing per słowo). To samo dla filmu 2. Zwykłe `.srt`/`
   są w renderze i w EDL. Są dopasowywane do rozdzielczości i fps montażu; jeśli nie mają dźwięku, dostają ciszę.
 - Pliki dźwięków, intro i outro muszą leżeć w tym samym folderze co filmy i `render.sh`.
 
+### Grafiki (nakładki)
+Sekcja „Grafiki": dodajesz obrazki (PNG z przezroczystością, JPG), przypisujesz do filmu 1, filmu 2 lub obu i ustawiasz pozycję (x, y w % kadru),
+szerokość (% szerokości kadru) i krycie. Grafika jest widoczna przez cały czas, gdy dany film jest w kadrze, bez animacji.
+W „Podgląd montażu" możesz ją przeciągać myszą; przycisk „pokaż w podglądzie" przewija do ujęcia z danego filmu.
+Plik graficzny musi leżeć w folderze z filmami. Intro i outro nie dostają nakładek, EDL ich nie zawiera.
+Podgląd ma proporcje rozmiaru wyjściowego (pola rozdzielczości w sekcji „Eksport").
+
 ### Zakres montażu
 Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
 wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).

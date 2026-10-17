@@ -38,6 +38,10 @@ tr.hit{cursor:pointer}tr.hit:hover{background:#ffffff0a}
 textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 .mut{color:var(--mut)}.mono{font-family:ui-monospace,Menlo,monospace}
 .mk{display:grid;gap:8px}
+#ovl{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1}
+#ovl img{position:absolute;height:auto;pointer-events:auto;cursor:move;user-select:none;touch-action:none}
+.stage.side #ovl{display:none}
+.ovrow{padding:6px;border:1px solid var(--line);border-radius:8px}
 .rule{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
 </style>
 </head>
@@ -72,6 +76,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
  <label>fps (krok klatki)</label><input type="number" id="fps" value="30" min="1" step="0.001">
 </div>
 <div class="stage side" id="stage">
+ <div id="ovl"></div>
  <span class="badge" id="badge" style="display:none"></span>
  <video id="v1" playsinline preload="auto" controls></video>
  <video id="v2" playsinline preload="auto" controls></video>
@@ -118,6 +123,13 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="mut" style="margin:8px 0" id="stat">—</div>
 <div class="tl" id="tl"><div class="head" id="head" style="left:0"></div></div>
 <div class="hitbox" style="margin-top:10px"><table id="hits"></table></div>
+</section>
+
+<section>
+<h2>Grafiki (nakładki)</h2>
+<div class="mut" style="margin-bottom:8px">Obrazki z dysku (PNG z przezroczystością, JPG) widoczne przez cały czas, gdy dany film jest w kadrze. W trybie „Podgląd montażu" możesz je przeciągać myszą. Pliki muszą leżeć w folderze z filmami. Intro i outro nie dostają nakładek.</div>
+<div id="ovlist"></div>
+<div class="row"><button id="addov">+ dodaj grafikę</button></div>
 </section>
 
 <section>
@@ -292,6 +304,18 @@ function planParts(segs,o){
       events:sfxEvents(ps,o.rules||[],id),out:parts.length===1?o.out:`${base}_cz${String(i+1).padStart(2,'0')}.mp4`};
   });
 }
+// nakładki graficzne: wejścia 1..n to obrazki, wejście 0 to film
+function ovGraph(ovs,o,vf){
+  const parts=[`[0:v]${vf}[b0]`];
+  ovs.forEach((v,i)=>{
+    const w=Math.max(2,Math.round(o.W*(+v.w||15)/100)),x=Math.round(o.W*(+v.x||0)/100),y=Math.round(o.H*(+v.y||0)/100);
+    const al=Math.max(0,Math.min(1,((v.op==null||v.op==='')?100:+v.op)/100));
+    parts.push(`[${i+1}:v]scale=${w}:-1,format=rgba,colorchannelmixer=aa=${n3(al)}[o${i}]`);
+    parts.push(`[b${i}][o${i}]overlay=${x}:${y}:format=auto[b${i+1}]`);
+  });
+  parts.push(`[b${ovs.length}]format=yuv420p[vo]`);
+  return parts.join(';');
+}
 function genScript(plan,o){
   const vf=`scale=${o.W}:${o.H}:force_original_aspect_ratio=decrease,pad=${o.W}:${o.H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${o.fps},format=yuv420p`;
   const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
@@ -314,7 +338,9 @@ function genScript(plan,o){
     pt.segs.forEach((s,i)=>{
       const ss=Math.max(0,s.src===1?s.a:s.a+o.offset),dur=s.b-s.a,f=s.src===1?o.f1:o.f2,name=`p${pid}_s${String(i).padStart(4,'0')}.mkv`;
       const af=`aresample=48000,aformat=channel_layouts=stereo,afade=t=in:d=0.01,afade=t=out:st=${n3(Math.max(0,dur-0.01))}:d=0.01`;
-      L.push(`ffmpeg -y -loglevel error -ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)} -vf "${vf}" -af "${af}" ${venc} -c:a pcm_s16le _seg/${name}`);
+      const ovs=(o.overlays||[]).filter(v=>v.name&&(v.film==='both'||+v.film===s.src));
+      if(ovs.length)L.push(`ffmpeg -y -loglevel error -ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)} ${ovs.map(v=>'-i '+q(v.name)).join(' ')} -filter_complex "${ovGraph(ovs,o,vf)}" -map "[vo]" -map 0:a -af "${af}" ${venc} -c:a pcm_s16le _seg/${name}`);
+      else L.push(`ffmpeg -y -loglevel error -ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)} -vf "${vf}" -af "${af}" ${venc} -c:a pcm_s16le _seg/${name}`);
       files.push(name);
     });
     if(pt.hasOutro)files.push('outro.mkv');
@@ -348,7 +374,7 @@ function genEDL(segs,o){
 
 const $=id=>document.getElementById(id);
 const v1=$('v1'),v2=$('v2');
-const S={rules:[{q:'megalodon',qsrc:'1',act:'toggle',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
+const S={ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'toggle',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
 const fmt=t=>{const s=Math.abs(t),hh=Math.floor(s/3600),mm=Math.floor(s/60)%60,ss=(s%60).toFixed(2).padStart(5,'0');return (t<0?'-':'')+(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+ss};
 const tv=id=>parseTime($(id).value);
 const offset=()=>S.m2-S.m1;
@@ -392,7 +418,7 @@ document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{
 // tryb podglądu
 function setMode(m){
   S.mode=m;stopPlay();const st=$('stage');
-  st.className='stage '+(m==='cal'?'side':'stack');
+  st.className='stage '+(m==='cal'?'side':'stack');stageRatio();
   v1.controls=v2.controls=(m==='cal');
   $('calui').style.display=m==='cal'?'':'none';$('monui').style.display=m==='mon'?'':'none';
   $('badge').style.display=m==='mon'?'':'none';
@@ -403,6 +429,7 @@ document.querySelectorAll('[name=mode]').forEach(r=>r.onchange=()=>setMode(r.val
 
 function segAt(t){return S.segs.find(s=>t>=s.a&&t<s.b)||S.segs[S.segs.length-1]}
 function setActive(src){
+  S.activeSrc=src;ovVisibility();
   v1.muted=src!==1;v2.muted=src!==2;v1.style.opacity=src===1?1:0;v2.style.opacity=src===2?1:0;
   const b=$('badge');b.textContent='Film '+src;b.style.background=src===1?'var(--c1)':'var(--c2)';
 }
@@ -497,7 +524,7 @@ $('tl').onclick=e=>{
 };
 
 // eksport
-const opts=()=>({intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+const opts=()=>({overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
 function loadExtra(kind,file){
   if(!file){S[kind+'F']='';S[kind+'Dur']=0;$('i'+kind).textContent='';recompute();return}
   const v=document.createElement('video');v.preload='metadata';v.src=URL.createObjectURL(file);
@@ -519,16 +546,63 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),introF:S.introF,outroF:S.outroF,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
   S.rules=p.rules||(p.q!=null?[{q:p.q,qsrc:p.qsrc||'1',act:'toggle'}]:S.rules);renderRules();
+  S.ov=(p.overlays||[]).map(v=>({...v,url:null}));renderOvRows();updateOverlayView();
   if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
   recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
 };
+function stageRatio(){const w=+$('W').value||1920,hh=+$('H').value||1080;$('stage').style.aspectRatio=S.mode==='mon'?(w+'/'+hh):''}
+['W','H'].forEach(id=>$(id).addEventListener('input',stageRatio));
+const num=(x,d)=>(x===''||x==null||isNaN(+x))?d:+x;
+function ovVisibility(){[...$('ovl').children].forEach(img=>{const v=S.ov[img.dataset.i];img.style.display=(v&&(v.film==='both'||+v.film===S.activeSrc))?'':'none'})}
+function syncOvRow(i){const r=document.querySelector(`.ovrow[data-i="${i}"]`);if(!r)return;const v=S.ov[i];r.querySelector('.ox').value=Math.round(v.x*10)/10;r.querySelector('.oy').value=Math.round(v.y*10)/10}
+function updateOverlayView(){
+  const box=$('ovl');box.innerHTML='';
+  S.ov.forEach((v,i)=>{
+    if(!v.url)return;
+    const img=new Image();img.src=v.url;img.draggable=false;img.dataset.i=i;
+    img.style.left=v.x+'%';img.style.top=v.y+'%';img.style.width=v.w+'%';img.style.opacity=num(v.op,100)/100;
+    img.onpointerdown=e=>{
+      e.preventDefault();img.setPointerCapture(e.pointerId);
+      const r=$('stage').getBoundingClientRect(),sx=e.clientX,sy=e.clientY,x0=v.x,y0=v.y;
+      img.onpointermove=ev=>{v.x=Math.max(-50,Math.min(100,x0+(ev.clientX-sx)/r.width*100));v.y=Math.max(-50,Math.min(100,y0+(ev.clientY-sy)/r.height*100));img.style.left=v.x+'%';img.style.top=v.y+'%';syncOvRow(i)};
+      img.onpointerup=()=>{img.onpointermove=null;img.onpointerup=null;recompute()};
+    };
+    box.appendChild(img);
+  });
+  ovVisibility();
+}
+function renderOvRows(){
+  const box=$('ovlist');box.innerHTML='';
+  S.ov.forEach((v,i)=>{
+    const d=document.createElement('div');d.className='rule ovrow';d.dataset.i=i;
+    d.innerHTML=`<input type="file" class="of" accept="image/*"> <span class="mut on"></span>
+      <label>film</label><select class="fl"><option value="1">film 1</option><option value="2">film 2</option><option value="both">oba</option></select>
+      <label>x %</label><input type="number" class="ox" step="0.5" style="width:70px">
+      <label>y %</label><input type="number" class="oy" step="0.5" style="width:70px">
+      <label>szerokość %</label><input type="number" class="ow" min="1" max="100" step="1" style="width:70px">
+      <label>krycie %</label><input type="number" class="oo" min="0" max="100" step="5" style="width:70px">
+      <button class="go">▶ pokaż w podglądzie</button><button class="rm" title="usuń">✕</button>`;
+    d.querySelector('.on').textContent=v.name?('('+v.name+(v.url?'':' – wczytaj plik ponownie')+')'):'';
+    d.querySelector('.fl').value=v.film;d.querySelector('.ox').value=v.x;d.querySelector('.oy').value=v.y;d.querySelector('.ow').value=v.w;d.querySelector('.oo').value=num(v.op,100);
+    d.querySelector('.of').onchange=e=>{const f=e.target.files[0];if(!f)return;v.name=f.name;v.url=URL.createObjectURL(f);d.querySelector('.on').textContent='('+f.name+')';updateOverlayView();recompute()};
+    d.querySelector('.fl').onchange=e=>{v.film=e.target.value;updateOverlayView();recompute()};
+    for(const [c,k,def] of [['.ox','x',0],['.oy','y',0],['.ow','w',15],['.oo','op',100]])d.querySelector(c).oninput=e=>{v[k]=num(e.target.value,def);updateOverlayView();recompute()};
+    d.querySelector('.rm').onclick=()=>{S.ov.splice(i,1);renderOvRows();updateOverlayView();recompute()};
+    d.querySelector('.go').onclick=()=>{
+      if(S.mode!=='mon'){document.querySelector('[name=mode][value=mon]').checked=true;setMode('mon')}
+      const s=S.segs.find(s=>v.film==='both'||s.src===+v.film);if(s)seekTo(Math.min(s.b-0.05,s.a+0.3));
+    };
+    box.appendChild(d);
+  });
+}
+$('addov').onclick=()=>{S.ov.push({name:'',url:null,film:'1',x:5,y:5,w:15,op:100});renderOvRows()};
 renderRules();setMode('cal');recompute();
 </script>
 </body>
