@@ -132,6 +132,14 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
  <label>outro (opcjonalnie)</label><input type="file" id="foutro" accept="video/*"><span class="mut" id="ioutro"></span>
 </div>
 <div class="mut" style="margin-bottom:8px">Pliki intro/outro oraz dźwięków muszą leżeć w tym samym folderze co filmy (przeglądarka zna tylko ich nazwy). Intro i outro nie są w podglądzie, ale są w renderze.</div>
+<div class="row" style="margin-bottom:8px">
+ <label>podziel na części</label><input type="number" id="nparts" min="1" max="500" value="1" style="width:70px">
+ <label>tnij</label>
+ <select id="psnap"><option value="1">przy najbliższym cięciu (części zbliżone długością)</option><option value="0">dokładnie po równo (może w środku ujęcia)</option></select>
+ <label><input type="checkbox" id="pall" checked> intro i outro w każdej części</label>
+</div>
+<div class="mut" style="margin-bottom:8px">Wyłączone „w każdej części" = intro tylko w pierwszej części, outro tylko w ostatniej. Przy 1 części powstaje jeden plik.</div>
+<div class="hitbox" style="max-height:220px;margin-bottom:8px"><table id="partsinfo"></table></div>
 <textarea id="script" readonly></textarea>
 <div class="row" style="margin-top:8px">
  <button id="copy" class="pri">Kopiuj skrypt</button>
@@ -235,12 +243,49 @@ function sfxFilter(evs){
   parts.push(`[0:a]${labels.join('')}amix=inputs=${labels.length+1}:duration=first:normalize=0[a]`);
   return {files,graph:parts.join(';')};
 }
-function genScript(segs,o){
+// podział materiału na części: snap = tnij przy najbliższym cięciu, inaczej dokładnie po równo
+function splitSegs(segs,n,snap){
+  n=Math.max(1,Math.min(Math.floor(+n)||1,500));
+  if(n===1||!segs.length)return segs.length?[segs]:[];
+  const total=segs.reduce((a,s)=>a+(s.b-s.a),0),cum=[];let c=0;
+  segs.forEach(s=>{c+=s.b-s.a;cum.push(c)});
+  const cuts=[];
+  for(let k=1;k<n;k++){
+    const target=total*k/n;let pick=target;
+    if(snap){let bd=1e18,best=null;for(let i=0;i<cum.length-1;i++){const d=Math.abs(cum[i]-target);if(d<bd){bd=d;best=cum[i]}}if(best!=null)pick=best}
+    cuts.push(pick);
+  }
+  const bounds=[...new Set(cuts.map(x=>+x.toFixed(6)))].filter(x=>x>1e-6&&x<total-1e-6).sort((a,b)=>a-b);bounds.push(total);
+  const parts=[];let cur=[],off=0,b=0;
+  for(const s of segs){
+    const so=off,eo=off+(s.b-s.a);let s0=so;
+    while(b<bounds.length&&bounds[b]<eo-1e-6){
+      if(bounds[b]-s0>1e-6)cur.push({...s,a:s.a+(s0-so),b:s.a+(bounds[b]-so),rule:s0===so?s.rule:null});
+      parts.push(cur);cur=[];s0=bounds[b];b++;
+    }
+    if(eo-s0>1e-6)cur.push({...s,a:s.a+(s0-so),rule:s0===so?s.rule:null});
+    if(b<bounds.length&&Math.abs(bounds[b]-eo)<1e-6){parts.push(cur);cur=[];b++}
+    off=eo;
+  }
+  if(cur.length)parts.push(cur);
+  return parts.filter(p=>p.length);
+}
+// plan renderu: lista części z własnymi efektami, intro/outro i nazwą pliku
+function planParts(segs,o){
+  const base=(o.out||'montaz.mp4').replace(/\.mp4$/i,''),parts=splitSegs(segs,o.n,o.snap);
+  return parts.map((ps,i)=>{
+    const hasIntro=!!o.intro&&(o.all||i===0),hasOutro=!!o.outro&&(o.all||i===parts.length-1);
+    const dur=ps.reduce((a,s)=>a+s.b-s.a,0),id=hasIntro?(o.intro.dur||0):0,od=hasOutro?(o.outro.dur||0):0;
+    return {i,segs:ps,from:ps[0].a,to:ps[ps.length-1].b,dur,total:dur+id+od,hasIntro,hasOutro,
+      events:sfxEvents(ps,o.rules||[],id),out:parts.length===1?o.out:`${base}_cz${String(i+1).padStart(2,'0')}.mp4`};
+  });
+}
+function genScript(plan,o){
   const vf=`scale=${o.W}:${o.H}:force_original_aspect_ratio=decrease,pad=${o.W}:${o.H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${o.fps},format=yuv420p`;
   const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
-  const L=['#!/bin/bash','set -e','rm -rf _seg _all.mkv && mkdir -p _seg'];
-  const evs=o.events||[];
-  if(o.intro||o.outro){
+  const L=['#!/bin/bash','set -e','rm -rf _seg && rm -f _all*.mkv && mkdir -p _seg'];
+  const useIntro=plan.some(p=>p.hasIntro),useOutro=plan.some(p=>p.hasOutro);
+  if(useIntro||useOutro){
     L.push('enc_extra() {',
       `  if ffmpeg -hide_banner -i "$1" 2>&1 | grep -q 'Audio:'; then`,
       `    ffmpeg -y -loglevel error -i "$1" -vf "${vf}" -af "aresample=48000,aformat=channel_layouts=stereo" ${venc} -c:a pcm_s16le "$2"`,
@@ -248,22 +293,31 @@ function genScript(segs,o){
       `    ffmpeg -y -loglevel error -i "$1" -f lavfi -i anullsrc=r=48000:cl=stereo -shortest -map 0:v -map 1:a -vf "${vf}" ${venc} -c:a pcm_s16le "$2"`,
       '  fi','}');
   }
-  if(o.intro)L.push(`enc_extra ${q(o.intro.f)} _seg/a_intro.mkv`);
-  segs.forEach((s,i)=>{
-    const ss=Math.max(0,s.src===1?s.a:s.a+o.offset),dur=s.b-s.a,f=s.src===1?o.f1:o.f2;
-    const af=`aresample=48000,aformat=channel_layouts=stereo,afade=t=in:d=0.01,afade=t=out:st=${n3(Math.max(0,dur-0.01))}:d=0.01`;
-    L.push(`ffmpeg -y -loglevel error -ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)} -vf "${vf}" -af "${af}" ${venc} -c:a pcm_s16le _seg/s${String(i).padStart(4,'0')}.mkv`);
+  if(useIntro)L.push(`enc_extra ${q(o.intro.f)} _seg/intro.mkv`);
+  if(useOutro)L.push(`enc_extra ${q(o.outro.f)} _seg/outro.mkv`);
+  plan.forEach(pt=>{
+    const pid=String(pt.i+1).padStart(2,'0'),files=[];
+    if(plan.length>1)L.push(`echo "Część ${pt.i+1}/${plan.length} → ${pt.out.replace(/["$`\\]/g,'')}"`);
+    if(pt.hasIntro)files.push('intro.mkv');
+    pt.segs.forEach((s,i)=>{
+      const ss=Math.max(0,s.src===1?s.a:s.a+o.offset),dur=s.b-s.a,f=s.src===1?o.f1:o.f2,name=`p${pid}_s${String(i).padStart(4,'0')}.mkv`;
+      const af=`aresample=48000,aformat=channel_layouts=stereo,afade=t=in:d=0.01,afade=t=out:st=${n3(Math.max(0,dur-0.01))}:d=0.01`;
+      L.push(`ffmpeg -y -loglevel error -ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)} -vf "${vf}" -af "${af}" ${venc} -c:a pcm_s16le _seg/${name}`);
+      files.push(name);
+    });
+    if(pt.hasOutro)files.push('outro.mkv');
+    L.push(`printf "file '%s'\\n" ${files.join(' ')} > _seg/list${pid}.txt`);
+    if(pt.events.length){
+      const sf=sfxFilter(pt.events);
+      L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list${pid}.txt -c copy _all${pid}.mkv`);
+      L.push(`ffmpeg -y -loglevel error -i _all${pid}.mkv ${sf.files.map(f=>'-i '+q(f)).join(' ')} -filter_complex "${sf.graph}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -movflags +faststart ${q(pt.out)}`);
+      L.push(`rm -f _all${pid}.mkv`);
+    }else{
+      L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list${pid}.txt -c:v copy -c:a aac -b:a 192k -movflags +faststart ${q(pt.out)}`);
+    }
+    L.push(`rm -f _seg/p${pid}_s*.mkv _seg/list${pid}.txt`);
   });
-  if(o.outro)L.push(`enc_extra ${q(o.outro.f)} _seg/z_outro.mkv`);
-  L.push(`(cd _seg && for f in *.mkv; do echo "file '$f'"; done > list.txt)`);
-  if(evs.length){
-    const sf=sfxFilter(evs);
-    L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list.txt -c copy _all.mkv`);
-    L.push(`ffmpeg -y -loglevel error -i _all.mkv ${sf.files.map(f=>'-i '+q(f)).join(' ')} -filter_complex "${sf.graph}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -movflags +faststart ${q(o.out)}`);
-  }else{
-    L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list.txt -c:v copy -c:a aac -b:a 192k -movflags +faststart ${q(o.out)}`);
-  }
-  L.push('rm -rf _seg _all.mkv',`echo "Gotowe: ${o.out.replace(/"/g,'')}"`);
+  L.push('rm -rf _seg',`echo "Gotowe: ${plan.map(p=>p.out).join(', ').replace(/["$`\\]/g,'')}"`);
   return L.join('\n');
 }
 function genEDL(segs,o){
@@ -437,17 +491,25 @@ function loadExtra(kind,file){
 }
 $('fintro').onchange=e=>loadExtra('intro',e.target.files[0]);
 $('foutro').onchange=e=>loadExtra('outro',e.target.files[0]);
-function renderExport(){$('script').value=S.segs.length?genScript(S.segs,opts()):'(brak ujęć — wczytaj filmy, ustaw zakres i wyszukaj słowo)'}
-['W','H','ofps','enc','outn'].forEach(id=>$(id).oninput=renderExport);
+function renderExport(){
+  const o=opts(),plan=planParts(S.segs,{n:+$('nparts').value||1,snap:$('psnap').value==='1',all:$('pall').checked,intro:o.intro,outro:o.outro,out:o.out,rules:S.rules});
+  $('script').value=plan.length?genScript(plan,o):'(brak ujęć — wczytaj filmy, ustaw zakres i wyszukaj słowo)';
+  const tb=$('partsinfo');
+  tb.innerHTML='<tr><th>część</th><th>zakres (czas filmu 1)</th><th>długość materiału</th><th>z intro/outro</th><th>plik</th></tr>'+
+    plan.map(p=>`<tr><td>${p.i+1}</td><td class="mono">${fmt(p.from)} – ${fmt(p.to)}</td><td class="mono">${fmt(p.dur)}</td><td class="mono">${fmt(p.total)}${p.hasIntro||p.hasOutro?' <span class="mut">('+[p.hasIntro?'intro':'',p.hasOutro?'outro':''].filter(Boolean).join('+')+')</span>':''}</td><td class="mono">${p.out.replace(/</g,'&lt;')}</td></tr>`).join('');
+}
+['W','H','ofps','enc','outn','nparts','psnap','pall'].forEach(id=>$(id).oninput=renderExport);
+$('psnap').onchange=$('pall').onchange=renderExport;
 const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()};
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),introF:S.introF,outroF:S.outroF,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),introF:S.introF,outroF:S.outroF,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
   S.rules=p.rules||(p.q!=null?[{q:p.q,qsrc:p.qsrc||'1',act:'toggle'}]:S.rules);renderRules();
+  if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
   recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');

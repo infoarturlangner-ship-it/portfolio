@@ -42,6 +42,16 @@ Powstaje `film1.json` (timing per słowo). To samo dla filmu 2. Zwykłe `.srt`/`
   są w renderze i w EDL. Są dopasowywane do rozdzielczości i fps montażu; jeśli nie mają dźwięku, dostają ciszę.
 - Pliki dźwięków, intro i outro muszą leżeć w tym samym folderze co filmy i `render.sh`.
 
+### Podział na części
+W sekcji „Eksport" pole **„podziel na części"** dzieli gotowy montaż na N osobnych plików (np. kilka odcinków z jednego długiego materiału).
+Tabela pokazuje zakres, długość każdej części oraz długość razem z intro/outro.
+- „tnij przy najbliższym cięciu" — części są zbliżone długością, ale granica wypada na istniejącym cięciu (nie przecina ujęcia);
+- „dokładnie po równo" — części mają równą długość, granica może wypaść w środku ujęcia.
+- Zaznaczone „intro i outro w każdej części" dodaje je do każdego pliku; odznaczone = intro tylko w pierwszej części, outro tylko w ostatniej.
+Pliki mają nazwy `nazwa_cz01.mp4`, `nazwa_cz02.mp4` itd. Efekty dźwiękowe liczone są osobno dla każdej części.
+Skrypt kasuje pliki tymczasowe po każdej części, więc nie potrzebuje miejsca na cały materiał naraz.
+EDL jest zawsze dla całego montażu (intro raz na początku, outro raz na końcu).
+
 Dodatkowo: eksport EDL do DaVinci Resolve oraz zapis/wczytanie projektu (markery i ustawienia).
 
 ## Uwagi
