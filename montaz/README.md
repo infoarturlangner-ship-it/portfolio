@@ -34,6 +34,14 @@ Powstaje `film1.json` (timing per słowo). To samo dla filmu 2. Zwykłe `.srt`/`
 5. Skopiuj skrypt / pobierz `render.sh`, uruchom w folderze z oryginalnymi plikami: `bash render.sh`.
    (Nazwy plików w skrypcie = nazwy wczytanych filmów.)
 
+### Dźwięk w cięciu, intro i outro
+- Przy każdym słowie możesz wskazać **plik dźwiękowy** (mp3/wav/m4a), jego głośność w % i przesunięcie w sekundach
+  (wartość ujemna = dźwięk zaczyna się przed cięciem). Efekt jest dogrywany na wierzch audio w momencie faktycznej zmiany obrazu.
+  W podglądzie słychać efekt przy cięciu (przesunięcie działa, głośność do 100%); w renderze głośność może być większa.
+- W sekcji „Eksport" możesz wybrać **intro** i **outro** (filmy dołączane na początku i końcu). Nie ma ich w podglądzie,
+  są w renderze i w EDL. Są dopasowywane do rozdzielczości i fps montażu; jeśli nie mają dźwięku, dostają ciszę.
+- Pliki dźwięków, intro i outro muszą leżeć w tym samym folderze co filmy i `render.sh`.
+
 Dodatkowo: eksport EDL do DaVinci Resolve oraz zapis/wczytanie projektu (markery i ustawienia).
 
 ## Uwagi
