@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Montaż na słowo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#14161a;--panel:#1d2027;--line:#2d323c;--txt:#e6e8ec;--mut:#8b93a1;--c1:#4c8dff;--c2:#ff9a3c;--ok:#3ecf8e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,system-ui,sans-serif}
+main{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:14px}
+h1{font-size:18px;margin:0}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 10px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:800px){.grid2{grid-template-columns:1fr}}
+label{color:var(--mut);font-size:12px}
+input,select,button,textarea{background:#12141a;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font:inherit}
+input[type=number],input[type=text]{width:100px}
+input[type=file]{max-width:100%}
+button{cursor:pointer}button:hover{border-color:var(--mut)}
+button.pri{background:var(--c1);border-color:var(--c1);color:#fff}
+.stage{position:relative;background:#000;border-radius:8px;overflow:hidden}
+.stage.stack{aspect-ratio:16/9}
+.stage.stack video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.stage.side{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:none}
+.stage.side video{width:100%;background:#000;border-radius:8px}
+.badge{position:absolute;top:8px;left:8px;padding:2px 8px;border-radius:5px;font-weight:600;z-index:2}
+.tl{position:relative;height:34px;display:flex;border-radius:6px;overflow:hidden;background:#12141a;cursor:pointer}
+.tl div.seg{height:100%;opacity:.85;border-right:1px solid #0006}
+.tl .head{position:absolute;top:0;bottom:0;width:2px;background:#fff;pointer-events:none}
+.s1{background:var(--c1)}.s2{background:var(--c2)}
+table{width:100%;border-collapse:collapse}
+td,th{padding:3px 6px;border-bottom:1px solid var(--line);text-align:left}
+tr.hit{cursor:pointer}tr.hit:hover{background:#ffffff0a}
+.hitbox{max-height:260px;overflow:auto}
+textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
+.mut{color:var(--mut)}.mono{font-family:ui-monospace,Menlo,monospace}
+.mk{display:grid;gap:8px}
+</style>
+</head>
+<body>
+<main>
+<div class="row"><h1>Montaż na słowo</h1><span class="mut">dwa filmy → cięcia przy każdym wystąpieniu słowa → mp4</span></div>
+
+<section>
+<h2>1. Pliki</h2>
+<div class="grid2">
+ <div class="mk">
+  <b style="color:var(--c1)">Film 1</b>
+  <div class="row"><label>wideo</label><input type="file" id="f1" accept="video/*"></div>
+  <div class="row"><label>transkrypcja (.json / .srt / .vtt)</label><input type="file" id="t1" accept=".json,.srt,.vtt,.txt"></div>
+  <div class="mut" id="i1">—</div>
+ </div>
+ <div class="mk">
+  <b style="color:var(--c2)">Film 2</b>
+  <div class="row"><label>wideo</label><input type="file" id="f2" accept="video/*"></div>
+  <div class="row"><label>transkrypcja (.json / .srt / .vtt)</label><input type="file" id="t2" accept=".json,.srt,.vtt,.txt"></div>
+  <div class="mut" id="i2">—</div>
+ </div>
+</div>
+</section>
+
+<section>
+<h2>2. Podgląd i markery</h2>
+<div class="row" style="margin-bottom:10px">
+ <label><input type="radio" name="mode" value="cal" checked> Kalibracja (oba obok siebie)</label>
+ <label><input type="radio" name="mode" value="mon"> Podgląd montażu</label>
+ <span style="flex:1"></span>
+ <label>fps (krok klatki)</label><input type="number" id="fps" value="30" min="1" step="0.001">
+</div>
+<div class="stage side" id="stage">
+ <span class="badge" id="badge" style="display:none"></span>
+ <video id="v1" playsinline preload="auto" controls></video>
+ <video id="v2" playsinline preload="auto" controls></video>
+</div>
+
+<div id="calui" style="margin-top:10px" class="grid2">
+ <div class="row">
+  <b style="color:var(--c1)">M1</b>
+  <button data-step="1,-1">−1s</button><button data-step="1,-fr">−1kl</button><button data-step="1,fr">+1kl</button><button data-step="1,1">+1s</button>
+  <button id="setm1" class="pri">Ustaw M1 = bieżący czas</button>
+  <input type="number" id="m1" step="0.001" value="0"> s
+ </div>
+ <div class="row">
+  <b style="color:var(--c2)">M2</b>
+  <button data-step="2,-1">−1s</button><button data-step="2,-fr">−1kl</button><button data-step="2,fr">+1kl</button><button data-step="2,1">+1s</button>
+  <button id="setm2" class="pri">Ustaw M2 = bieżący czas</button>
+  <input type="number" id="m2" step="0.001" value="0"> s
+ </div>
+</div>
+<div class="mut" style="margin-top:6px">Znajdź to samo zdarzenie (np. klaśnięcie, początek słowa) w obu filmach, zatrzymaj klatkę i ustaw marker. Offset: <span class="mono" id="offv">0.000</span> s</div>
+
+<div id="monui" style="display:none;margin-top:10px" class="row">
+ <button id="play" class="pri">▶ Odtwórz</button>
+ <input type="range" id="seek" style="flex:1" min="0" max="1" step="0.01" value="0">
+ <span class="mono" id="tnow">0:00.00</span>
+</div>
+</section>
+
+<section>
+<h2>3. Słowo i cięcia</h2>
+<div class="row">
+ <label>słowo (fragment)</label><input type="text" id="q" value="megalodon" style="width:160px">
+ <label>szukaj w transkrypcji</label>
+ <select id="qsrc"><option value="1">filmu 1</option><option value="2">filmu 2</option><option value="3">obu</option></select>
+ <label>start od</label>
+ <select id="start"><option value="1">filmu 1</option><option value="2">filmu 2</option></select>
+ <label>min. długość ujęcia (s)</label><input type="number" id="minshot" value="1" min="0" step="0.1" style="width:70px">
+ <label>od</label><input type="number" id="tin" step="0.01" style="width:80px">
+ <label>do</label><input type="number" id="tout" step="0.01" style="width:80px">
+ <button id="autor">zakres auto</button>
+</div>
+<div class="mut" style="margin:8px 0" id="stat">—</div>
+<div class="tl" id="tl"><div class="head" id="head" style="left:0"></div></div>
+<div class="hitbox" style="margin-top:10px"><table id="hits"></table></div>
+</section>
+
+<section>
+<h2>4. Eksport</h2>
+<div class="row" style="margin-bottom:8px">
+ <label>rozdzielczość</label><input type="number" id="W" value="1920" style="width:70px">×<input type="number" id="H" value="1080" style="width:70px">
+ <label>fps</label><input type="number" id="ofps" value="30" style="width:60px">
+ <label>enkoder</label>
+ <select id="enc"><option value="x264">x264 crf 18 (jakość)</option><option value="vt">VideoToolbox (szybko, Mac)</option></select>
+ <label>plik wyjściowy</label><input type="text" id="outn" value="montaz.mp4" style="width:140px">
+</div>
+<textarea id="script" readonly></textarea>
+<div class="row" style="margin-top:8px">
+ <button id="copy" class="pri">Kopiuj skrypt</button>
+ <button id="dlsh">Pobierz render.sh</button>
+ <button id="dledl">Pobierz EDL (DaVinci)</button>
+ <button id="save">Zapisz projekt</button>
+ <label>wczytaj projekt <input type="file" id="load" accept=".json"></label>
+</div>
+<div class="mut" style="margin-top:8px">Uruchom skrypt w Terminalu w folderze z oryginalnymi plikami wideo (nazwy muszą się zgadzać): <span class="mono">bash render.sh</span></div>
+</section>
+</main>
+
+<script>
+//#LOGIC-START
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ł/g,'l').replace(/[^a-z0-9]/g,'');
+function splitWords(line,t0,t1){
+  const ws=line.split(/\s+/).filter(Boolean);if(!ws.length)return[];
+  const tot=ws.reduce((a,w)=>a+w.length,0),dur=t1-t0;let c=t0;
+  return ws.map(w=>{const d=dur*w.length/tot;const o={t0:c,t1:c+d,text:w};c+=d;return o});
+}
+function parseJSON(j){
+  const segs=Array.isArray(j)?j:(j.transcription||j.segments||[]);const out=[];
+  for(const s of segs){
+    if(Array.isArray(s.words)&&s.words.length){for(const w of s.words){const t=(w.word||w.text||'').trim();if(t)out.push({t0:+w.start,t1:+w.end,text:t})}continue}
+    let a,b;
+    if(s.offsets){a=s.offsets.from/1000;b=s.offsets.to/1000}
+    else if(s.start!=null){a=+s.start;b=+s.end}
+    else continue;
+    const t=(s.text||'').trim();if(t)out.push(...splitWords(t,a,b));
+  }
+  return out;
+}
+function ts(h,m,s,f){return (+h||0)*3600+(+m)*60+(+s)+(+('0.'+f))}
+function parseSubs(text){
+  const out=[];const re=/(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})[^\n]*\n([\s\S]*?)(?=\n\s*\n|$)/g;let m;
+  text=text.replace(/\r/g,'');
+  while((m=re.exec(text))){
+    const a=ts(m[1],m[2],m[3],m[4]),b=ts(m[5],m[6],m[7],m[8]);
+    const t=m[9].replace(/<[^>]+>/g,'').replace(/\n/g,' ').trim();if(t)out.push(...splitWords(t,a,b));
+  }
+  return out;
+}
+function parseTranscript(txt){
+  txt=txt.replace(/^﻿/,'').trim();
+  if(txt[0]==='{'||txt[0]==='[')return parseJSON(JSON.parse(txt));
+  return parseSubs(txt);
+}
+// trafienia w czasie globalnym (= czas filmu 1); offset = M2 - M1
+function findHits(words,q,src,offset){
+  const nq=norm(q);if(!nq)return[];
+  return words.filter(w=>norm(w.text).includes(nq)).map(w=>({src,t:src===1?w.t0:w.t0-offset,text:w.text}));
+}
+function buildSegments(hits,{minShot,startSrc,inT,outT}){
+  const hs=[...hits].sort((a,b)=>a.t-b.t);const segs=[];let cur=startSrc,start=inT;
+  for(const h of hs){
+    if(h.t<=inT||h.t>=outT)continue;
+    if(h.t-start<minShot)continue;
+    segs.push({src:cur,a:start,b:h.t});cur=cur===1?2:1;start=h.t;
+  }
+  if(outT-start>1e-4){
+    if(outT-start<minShot&&segs.length)segs[segs.length-1].b=outT;
+    else segs.push({src:cur,a:start,b:outT});
+  }
+  return segs;
+}
+const q=s=>"'"+s.replace(/'/g,"'\\''")+"'";
+const n3=x=>(Math.round(x*1000)/1000).toFixed(3);
+function genScript(segs,o){
+  const vf=`scale=${o.W}:${o.H}:force_original_aspect_ratio=decrease,pad=${o.W}:${o.H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${o.fps},format=yuv420p`;
+  const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
+  const L=['#!/bin/bash','set -e','rm -rf _seg && mkdir -p _seg'];
+  segs.forEach((s,i)=>{
+    const ss=Math.max(0,s.src===1?s.a:s.a+o.offset),dur=s.b-s.a,f=s.src===1?o.f1:o.f2;
+    const af=`aresample=48000,aformat=channel_layouts=stereo,afade=t=in:d=0.01,afade=t=out:st=${n3(Math.max(0,dur-0.01))}:d=0.01`;
+    L.push(`ffmpeg -y -loglevel error -ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)} -vf "${vf}" -af "${af}" ${venc} -c:a pcm_s16le _seg/s${String(i).padStart(4,'0')}.mkv`);
+  });
+  L.push(`(cd _seg && for f in s*.mkv; do echo "file '$f'"; done > list.txt)`);
+  L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list.txt -c:v copy -c:a aac -b:a 192k -movflags +faststart ${q(o.out)}`);
+  L.push('rm -rf _seg',`echo "Gotowe: ${o.out.replace(/"/g,'')}"`);
+  return L.join('\n');
+}
+function genEDL(segs,o){
+  const fr=Math.round(o.fps);const tc=t=>{let f=Math.round(t*fr);const F=f%fr;f=(f-F)/fr;return [Math.floor(f/3600),Math.floor(f/60)%60,f%60,F].map(x=>String(x).padStart(2,'0')).join(':')};
+  const L=['TITLE: MONTAZ','FCM: NON-DROP FRAME',''];let rec=3600;
+  segs.forEach((s,i)=>{
+    const ss=Math.max(0,s.src===1?s.a:s.a+o.offset),d=s.b-s.a,f=s.src===1?o.f1:o.f2;
+    L.push(`${String(i+1).padStart(3,'0')}  FILM${s.src}    AA/V  C        ${tc(ss)} ${tc(ss+d)} ${tc(rec)} ${tc(rec+d)}`,`* FROM CLIP NAME: ${f}`,'');rec+=d;
+  });
+  return L.join('\n');
+}
+//#LOGIC-END
+
+const $=id=>document.getElementById(id);
+const v1=$('v1'),v2=$('v2');
+const S={w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
+const fmt=t=>{const s=Math.abs(t);return (t<0?'-':'')+Math.floor(s/60)+':'+(s%60).toFixed(2).padStart(5,'0')};
+const offset=()=>S.m2-S.m1;
+const hitKey=h=>h.src+'@'+h.t.toFixed(3);
+
+function loadVideo(k,file){
+  const v=k===1?v1:v2;v.src=URL.createObjectURL(file);S['f'+k]=file.name;
+  v.onloadedmetadata=()=>{$('i'+k).textContent=`${file.name} · ${v.videoWidth}×${v.videoHeight} · ${fmt(v.duration)}`;autoRange();recompute()};
+}
+async function loadTr(k,file){
+  try{S['w'+k]=parseTranscript(await file.text());$('i'+k).textContent=($('i'+k).textContent.split(' · transkr')[0])+` · transkr.: ${S['w'+k].length} słów`}
+  catch(e){alert('Nie udało się wczytać transkrypcji: '+e.message)}
+  recompute();
+}
+$('f1').onchange=e=>e.target.files[0]&&loadVideo(1,e.target.files[0]);
+$('f2').onchange=e=>e.target.files[0]&&loadVideo(2,e.target.files[0]);
+$('t1').onchange=e=>e.target.files[0]&&loadTr(1,e.target.files[0]);
+$('t2').onchange=e=>e.target.files[0]&&loadTr(2,e.target.files[0]);
+
+function autoRange(){
+  if(S.manual)return;
+  const o=offset(),d1=v1.duration||0,d2=v2.duration||0;
+  if(!d1||!d2)return;
+  $('tin').value=n3(Math.max(0,-o));$('tout').value=n3(Math.min(d1,d2-o));
+}
+$('autor').onclick=()=>{S.manual=false;autoRange();recompute()};
+['tin','tout'].forEach(id=>$(id).oninput=()=>{S.manual=true;recompute()});
+
+// markery
+function setMarkers(){S.m1=+$('m1').value||0;S.m2=+$('m2').value||0;$('offv').textContent=n3(offset());autoRange();recompute()}
+$('m1').oninput=$('m2').oninput=setMarkers;
+$('setm1').onclick=()=>{$('m1').value=n3(v1.currentTime);setMarkers()};
+$('setm2').onclick=()=>{$('m2').value=n3(v2.currentTime);setMarkers()};
+document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{
+  const [k,d]=b.dataset.step.split(',');const v=k==='1'?v1:v2;const fps=+$('fps').value||30;
+  const step=d==='fr'?1/fps:d==='-fr'?-1/fps:+d;v.pause();v.currentTime=Math.max(0,v.currentTime+step);
+});
+
+// tryb podglądu
+function setMode(m){
+  S.mode=m;stopPlay();const st=$('stage');
+  st.className='stage '+(m==='cal'?'side':'stack');
+  v1.controls=v2.controls=(m==='cal');
+  $('calui').style.display=m==='cal'?'':'none';$('monui').style.display=m==='mon'?'':'none';
+  $('badge').style.display=m==='mon'?'':'none';
+  if(m==='cal'){[v1,v2].forEach(v=>{v.muted=false;v.style.opacity=1})}
+  else{const r=[+$('tin').value||0,+$('tout').value||0];$('seek').min=r[0];$('seek').max=r[1];seekTo(r[0])}
+}
+document.querySelectorAll('[name=mode]').forEach(r=>r.onchange=()=>setMode(r.value));
+
+function segAt(t){return S.segs.find(s=>t>=s.a&&t<s.b)||S.segs[S.segs.length-1]}
+function setActive(src){
+  v1.muted=src!==1;v2.muted=src!==2;v1.style.opacity=src===1?1:0;v2.style.opacity=src===2?1:0;
+  const b=$('badge');b.textContent='Film '+src;b.style.background=src===1?'var(--c1)':'var(--c2)';
+}
+function seekTo(t){
+  v1.currentTime=t;v2.currentTime=Math.max(0,t+offset());$('seek').value=t;$('tnow').textContent=fmt(t);
+  const s=segAt(t);setActive(s?s.src:+$('start').value);moveHead(t);
+}
+function stopPlay(){S.playing=false;v1.pause();v2.pause();$('play').textContent='▶ Odtwórz'}
+function loop(){
+  if(!S.playing)return;
+  const t=v1.currentTime,outT=+$('tout').value;
+  if(t>=outT){stopPlay();return}
+  const s=segAt(t);setActive(s?s.src:+$('start').value);
+  const want=t+offset();if(Math.abs(v2.currentTime-want)>0.12)v2.currentTime=want;
+  $('seek').value=t;$('tnow').textContent=fmt(t);moveHead(t);
+  requestAnimationFrame(loop);
+}
+$('play').onclick=async()=>{
+  if(S.playing){stopPlay();return}
+  let t=+$('seek').value;if(t>=+$('tout').value-0.05)t=+$('tin').value;
+  seekTo(t);S.playing=true;$('play').textContent='❚❚ Pauza';
+  try{await Promise.all([v1.play(),v2.play()])}catch(e){stopPlay();alert('Nie można odtworzyć: '+e.message)}
+  loop();
+};
+$('seek').oninput=()=>{const was=S.playing;if(was)stopPlay();seekTo(+$('seek').value)};
+
+// wyszukiwanie i oś
+function recompute(){
+  const o=offset(),inT=+$('tin').value||0,outT=+$('tout').value||0;
+  let hits=[];const qs=$('qsrc').value,qq=$('q').value;
+  if(qs!=='2')hits.push(...findHits(S.w1,qq,1,o));
+  if(qs!=='1')hits.push(...findHits(S.w2,qq,2,o));
+  hits.sort((a,b)=>a.t-b.t);S.hits=hits;
+  const active=hits.filter(h=>!S.off.has(hitKey(h)));
+  S.segs=outT>inT?buildSegments(active,{minShot:+$('minshot').value||0,startSrc:+$('start').value,inT,outT}):[];
+  renderHits(inT,outT);renderTL(inT,outT);renderExport();
+  $('seek').min=inT;$('seek').max=outT;
+  const used=S.segs.length?S.segs.length-1:0;
+  $('stat').textContent=`Trafień: ${hits.length} (zaznaczonych: ${active.length}) · cięć: ${used} · ujęć: ${S.segs.length} · długość: ${fmt(Math.max(0,outT-inT))}`;
+}
+['q','qsrc','start','minshot'].forEach(id=>$(id).oninput=recompute);
+function renderHits(inT,outT){
+  const tb=$('hits');tb.innerHTML='<tr><th></th><th>źródło</th><th>czas</th><th>słowo</th></tr>';
+  S.hits.forEach(h=>{
+    const tr=document.createElement('tr');tr.className='hit';
+    const out=h.t<=inT||h.t>=outT;
+    tr.innerHTML=`<td><input type="checkbox" ${S.off.has(hitKey(h))?'':'checked'}></td><td style="color:var(--c${h.src})">film ${h.src}</td><td class="mono">${fmt(h.t)}${out?' <span class="mut">(poza zakresem)</span>':''}</td><td>${h.text.replace(/</g,'&lt;')}</td>`;
+    tr.querySelector('input').onclick=e=>{e.stopPropagation();const k=hitKey(h);e.target.checked?S.off.delete(k):S.off.add(k);recompute()};
+    tr.onclick=()=>{if(S.mode!=='mon'){document.querySelector('[name=mode][value=mon]').checked=true;setMode('mon')}seekTo(Math.max(inT,h.t-1.5))};
+    tb.appendChild(tr);
+  });
+}
+function renderTL(inT,outT){
+  const tl=$('tl');[...tl.querySelectorAll('.seg')].forEach(e=>e.remove());const tot=outT-inT;if(tot<=0)return;
+  S.segs.forEach(s=>{const d=document.createElement('div');d.className='seg s'+s.src;d.style.width=((s.b-s.a)/tot*100)+'%';d.title=`film ${s.src}: ${fmt(s.a)}–${fmt(s.b)}`;tl.insertBefore(d,$('head'))});
+}
+function moveHead(t){const a=+$('tin').value||0,b=+$('tout').value||1;$('head').style.left=Math.max(0,Math.min(100,(t-a)/(b-a)*100))+'%'}
+$('tl').onclick=e=>{
+  if(S.mode!=='mon'){document.querySelector('[name=mode][value=mon]').checked=true;setMode('mon')}
+  const r=$('tl').getBoundingClientRect(),a=+$('tin').value||0,b=+$('tout').value||0;
+  stopPlay();seekTo(a+(e.clientX-r.left)/r.width*(b-a));
+};
+
+// eksport
+const opts=()=>({f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+function renderExport(){$('script').value=S.segs.length?genScript(S.segs,opts()):'(brak ujęć — wczytaj filmy, ustaw zakres i wyszukaj słowo)'}
+['W','H','ofps','enc','outn'].forEach(id=>$(id).oninput=renderExport);
+const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
+$('dlsh').onclick=()=>dl('render.sh',$('script').value);
+$('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,q:$('q').value,qsrc:$('qsrc').value,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('load').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
+  S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
+  for(const k of['q','qsrc','start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
+  S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
+  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo i transkrypcje (nazwy w projekcie: '+p.f1+', '+p.f2+').');
+};
+setMode('cal');recompute();
+</script>
+</body>
+</html>
