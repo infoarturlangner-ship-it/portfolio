@@ -42,6 +42,10 @@ Powstaje `film1.json` (timing per słowo). To samo dla filmu 2. Zwykłe `.srt`/`
   są w renderze i w EDL. Są dopasowywane do rozdzielczości i fps montażu; jeśli nie mają dźwięku, dostają ciszę.
 - Pliki dźwięków, intro i outro muszą leżeć w tym samym folderze co filmy i `render.sh`.
 
+### Zakres montażu
+Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
+wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).
+
 ### Podział na części
 W sekcji „Eksport" pole **„podziel na części"** dzieli gotowy montaż na N osobnych plików (np. kilka odcinków z jednego długiego materiału).
 Tabela pokazuje zakres, długość każdej części oraz długość razem z intro/outro.

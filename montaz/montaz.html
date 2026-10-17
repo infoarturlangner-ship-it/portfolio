@@ -109,8 +109,10 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
  <label>start od</label>
  <select id="start"><option value="1">filmu 1</option><option value="2">filmu 2</option></select>
  <label>min. długość ujęcia (s)</label><input type="number" id="minshot" value="1" min="0" step="0.1" style="width:70px">
- <label>od</label><input type="number" id="tin" step="0.01" style="width:80px">
- <label>do</label><input type="number" id="tout" step="0.01" style="width:80px">
+ <label>od</label><input type="text" id="tin" placeholder="g:mm:ss" style="width:95px" title="np. 1:12:05, 72:05 albo 4325">
+ <button id="tinnow" title="ustaw na bieżący czas filmu 1">◀ ustaw na bieżący</button>
+ <label>do</label><input type="text" id="tout" placeholder="g:mm:ss" style="width:95px" title="np. 1:12:05, 72:05 albo 4325">
+ <button id="toutnow" title="ustaw na bieżący czas filmu 1">◀ ustaw na bieżący</button>
  <button id="autor">zakres auto</button>
 </div>
 <div class="mut" style="margin:8px 0" id="stat">—</div>
@@ -216,6 +218,16 @@ function buildSegments(hits,{minShot,startSrc,inT,outT}){
     else segs.push({src:cur,a:start,b:outT,rule:startRule});
   }
   return segs;
+}
+// czas: "1:12:05", "72:05", "4325" lub "4325.5" -> sekundy
+function parseTime(s){
+  s=String(s==null?'':s).trim().replace(',','.');if(!s)return 0;
+  const parts=s.split(':');if(parts.length>3||parts.some(x=>x===''||isNaN(+x)))return 0;
+  return parts.reduce((t,x)=>t*60+(+x),0);
+}
+function fmtHMS(t){
+  t=Math.round(Math.max(0,t)*100)/100;const h=Math.floor(t/3600),m=Math.floor(t/60)%60;let s=(t%60).toFixed(2).replace(/\.?0+$/,'');
+  return h+':'+String(m).padStart(2,'0')+':'+(s.split('.')[0].padStart(2,'0'))+(s.includes('.')?'.'+s.split('.')[1]:'');
 }
 const q=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 const n3=x=>(Math.round(x*1000)/1000).toFixed(3);
@@ -337,7 +349,8 @@ function genEDL(segs,o){
 const $=id=>document.getElementById(id);
 const v1=$('v1'),v2=$('v2');
 const S={rules:[{q:'megalodon',qsrc:'1',act:'toggle',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
-const fmt=t=>{const s=Math.abs(t);return (t<0?'-':'')+Math.floor(s/60)+':'+(s%60).toFixed(2).padStart(5,'0')};
+const fmt=t=>{const s=Math.abs(t),hh=Math.floor(s/3600),mm=Math.floor(s/60)%60,ss=(s%60).toFixed(2).padStart(5,'0');return (t<0?'-':'')+(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+ss};
+const tv=id=>parseTime($(id).value);
 const offset=()=>S.m2-S.m1;
 const hitKey=h=>h.rule+':'+h.src+'@'+h.t.toFixed(3);
 
@@ -359,8 +372,10 @@ function autoRange(){
   if(S.manual)return;
   const o=offset(),d1=v1.duration||0,d2=v2.duration||0;
   if(!d1||!d2)return;
-  $('tin').value=n3(Math.max(0,-o));$('tout').value=n3(Math.min(d1,d2-o));
+  $('tin').value=fmtHMS(Math.max(0,-o));$('tout').value=fmtHMS(Math.min(d1,d2-o));
 }
+$('tinnow').onclick=()=>{S.manual=true;$('tin').value=fmtHMS(v1.currentTime);recompute()};
+$('toutnow').onclick=()=>{S.manual=true;$('tout').value=fmtHMS(v1.currentTime);recompute()};
 $('autor').onclick=()=>{S.manual=false;autoRange();recompute()};
 ['tin','tout'].forEach(id=>$(id).oninput=()=>{S.manual=true;recompute()});
 
@@ -382,7 +397,7 @@ function setMode(m){
   $('calui').style.display=m==='cal'?'':'none';$('monui').style.display=m==='mon'?'':'none';
   $('badge').style.display=m==='mon'?'':'none';
   if(m==='cal'){[v1,v2].forEach(v=>{v.muted=false;v.style.opacity=1})}
-  else{const r=[+$('tin').value||0,+$('tout').value||0];$('seek').min=r[0];$('seek').max=r[1];seekTo(r[0])}
+  else{const r=[tv('tin'),tv('tout')];$('seek').min=r[0];$('seek').max=r[1];seekTo(r[0])}
 }
 document.querySelectorAll('[name=mode]').forEach(r=>r.onchange=()=>setMode(r.value));
 
@@ -399,7 +414,7 @@ function playSfx(e){const r=S.rules[e.rule];if(!r||!r.sfxUrl)return;const a=new 
 function stopPlay(){S.playing=false;v1.pause();v2.pause();$('play').textContent='▶ Odtwórz'}
 function loop(){
   if(!S.playing)return;
-  const t=v1.currentTime,outT=+$('tout').value;
+  const t=v1.currentTime,outT=tv('tout');
   if(S.lastT==null)S.lastT=t;
   for(const e of S.events)if(e.tg>S.lastT&&e.tg<=t)playSfx(e);
   S.lastT=t;
@@ -411,7 +426,7 @@ function loop(){
 }
 $('play').onclick=async()=>{
   if(S.playing){stopPlay();return}
-  let t=+$('seek').value;if(t>=+$('tout').value-0.05)t=+$('tin').value;
+  let t=+$('seek').value;if(t>=tv('tout')-0.05)t=tv('tin');
   seekTo(t);S.playing=true;$('play').textContent='❚❚ Pauza';
   try{await Promise.all([v1.play(),v2.play()])}catch(e){stopPlay();alert('Nie można odtworzyć: '+e.message)}
   loop();
@@ -420,7 +435,7 @@ $('seek').oninput=()=>{const was=S.playing;if(was)stopPlay();seekTo(+$('seek').v
 
 // wyszukiwanie i oś
 function recompute(){
-  const o=offset(),inT=+$('tin').value||0,outT=+$('tout').value||0;
+  const o=offset(),inT=tv('tin'),outT=tv('tout');
   const hits=findAllHits(S.rules,S.w1,S.w2,o);S.hits=hits;
   const active=hits.filter(h=>!S.off.has(hitKey(h)));
   S.segs=outT>inT?buildSegments(active,{minShot:+$('minshot').value||0,startSrc:+$('start').value,inT,outT}):[];
@@ -474,10 +489,10 @@ function renderTL(inT,outT){
   const tl=$('tl');[...tl.querySelectorAll('.seg')].forEach(e=>e.remove());const tot=outT-inT;if(tot<=0)return;
   S.segs.forEach(s=>{const d=document.createElement('div');d.className='seg s'+s.src;d.style.width=((s.b-s.a)/tot*100)+'%';d.title=`film ${s.src}: ${fmt(s.a)}–${fmt(s.b)}`;tl.insertBefore(d,$('head'))});
 }
-function moveHead(t){const a=+$('tin').value||0,b=+$('tout').value||1;$('head').style.left=Math.max(0,Math.min(100,(t-a)/(b-a)*100))+'%'}
+function moveHead(t){const a=tv('tin'),b=(tv('tout')||1);$('head').style.left=Math.max(0,Math.min(100,(t-a)/(b-a)*100))+'%'}
 $('tl').onclick=e=>{
   if(S.mode!=='mon'){document.querySelector('[name=mode][value=mon]').checked=true;setMode('mon')}
-  const r=$('tl').getBoundingClientRect(),a=+$('tin').value||0,b=+$('tout').value||0;
+  const r=$('tl').getBoundingClientRect(),a=tv('tin'),b=tv('tout');
   stopPlay();seekTo(a+(e.clientX-r.left)/r.width*(b-a));
 };
 
