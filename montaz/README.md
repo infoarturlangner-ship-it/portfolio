@@ -53,6 +53,18 @@ Podgląd ma proporcje rozmiaru wyjściowego (pola rozdzielczości w sekcji „Ek
 Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
 wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).
 
+### Automatyczna zmiana kamery
+W sekcji 3 zaznacz **„automatyczna zmiana kamery co … s"**. Jeśli przez podany czas żadne słowo nie przełączy obrazu,
+program przełączy go sam na drugi film (licznik zaczyna się od nowa po każdej zmianie, także tej od słowa).
+Odznacz pole, żeby zmieniały się tylko słowa. Do automatycznych zmian nie są dogrywane efekty dźwiękowe (należą do słów).
+
+### Przenikanie dźwięku przy intro i outro
+W sekcji „Eksport" ustawiasz długość nakładania (domyślnie 1,5 s; 0 = twarde cięcie dźwięku).
+- **Intro → montaż:** intro gra do samego końca, a pod jego końcówką wjeżdża dźwięk montażu. Dźwięk jest brany ze źródła
+  z chwili tuż przed początkiem zakresu, więc nie rozjeżdża się z obrazem (jeśli zakres zaczyna się przy samym początku filmu, nakładka jest krótsza).
+- **Montaż → outro:** dźwięk outro zaczyna się wcześniej niż jego obraz, a dźwięk montażu się wycisza.
+  Ponieważ outro nie ma materiału „sprzed siebie", jego dźwięk kończy się o tyle samo wcześniej niż obraz outro.
+
 ### Podział na części
 W sekcji „Eksport" pole **„podziel na części"** dzieli gotowy montaż na N osobnych plików (np. kilka odcinków z jednego długiego materiału).
 Tabela pokazuje zakres, długość każdej części oraz długość razem z intro/outro.

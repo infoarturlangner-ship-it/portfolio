@@ -113,6 +113,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row">
  <label>start od</label>
  <select id="start"><option value="1">filmu 1</option><option value="2">filmu 2</option></select>
+ <label><input type="checkbox" id="auto"> automatyczna zmiana kamery co</label><input type="number" id="autosec" value="30" min="1" step="1" style="width:65px"><label>s</label>
  <label>min. długość ujęcia (s)</label><input type="number" id="minshot" value="1" min="0" step="0.1" style="width:70px">
  <label>od</label><input type="text" id="tin" placeholder="g:mm:ss" style="width:95px" title="np. 1:12:05, 72:05 albo 4325">
  <button id="tinnow" title="ustaw na bieżący czas filmu 1">◀ ustaw na bieżący</button>
@@ -144,6 +145,11 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row" style="margin-bottom:8px">
  <label>intro (opcjonalnie)</label><input type="file" id="fintro" accept="video/*"><span class="mut" id="iintro"></span>
  <label>outro (opcjonalnie)</label><input type="file" id="foutro" accept="video/*"><span class="mut" id="ioutro"></span>
+</div>
+<div class="row" style="margin-bottom:8px">
+ <label>nakładanie dźwięku: intro → montaż (s)</label><input type="number" id="ovin" min="0" step="0.1" value="1.5" style="width:70px">
+ <label>montaż → outro (s)</label><input type="number" id="ovout" min="0" step="0.1" value="1.5" style="width:70px">
+ <span class="mut">0 = twarde cięcie dźwięku. Intro gra do końca, a pod nim wjeżdża dźwięk montażu (brany ze źródła sprzed początku zakresu, więc nie rozjeżdża się z obrazem). Dźwięk outro zaczyna się wcześniej niż jego obraz, więc kończy się o tyle wcześniej.</span>
 </div>
 <div class="mut" style="margin-bottom:8px">Pliki intro/outro oraz dźwięków muszą leżeć w tym samym folderze co filmy (przeglądarka zna tylko ich nazwy). Intro i outro nie są w podglądzie, ale są w renderze.</div>
 <div class="row" style="margin-bottom:8px">
@@ -216,15 +222,24 @@ function findAllHits(rules,w1,w2,offset){
   });
   return hits.sort((a,b)=>a.t-b.t);
 }
-function buildSegments(hits,{minShot,startSrc,inT,outT}){
+function buildSegments(hits,{minShot,startSrc,inT,outT,autoSec=0}){
   const hs=[...hits].sort((a,b)=>a.t-b.t);const segs=[];let cur=startSrc,start=inT,startRule=null;
+  const auto=autoSec>0?Math.max(autoSec,minShot||0,0.5):0;
+  // samoczynna zmiana, gdy od ostatniego przełączenia minęło `auto` s (do chwili `limit`)
+  const autoUntil=limit=>{
+    while(auto&&start+auto<limit-1e-6&&limit-(start+auto)>=Math.max(minShot||0,0.1)){
+      segs.push({src:cur,a:start,b:start+auto,rule:startRule});cur=cur===1?2:1;start+=auto;startRule=null;
+    }
+  };
   for(const h of hs){
     if(h.t<=inT||h.t>=outT)continue;
+    autoUntil(h.t);
     const next=(h.act===1||h.act===2)?h.act:(cur===1?2:1);
     if(next===cur)continue;
     if(h.t-start<minShot)continue;
     segs.push({src:cur,a:start,b:h.t,rule:startRule});cur=next;start=h.t;startRule=h.rule;
   }
+  autoUntil(outT);
   if(outT-start>1e-4){
     if(outT-start<minShot&&segs.length)segs[segs.length-1].b=outT;
     else segs.push({src:cur,a:start,b:outT,rule:startRule});
@@ -253,18 +268,18 @@ function sfxEvents(segs,rules,introDur=0){
   });
   return ev;
 }
-function sfxFilter(evs){
+function sfxFilter(evs,base='[0:a]',first=1){
   const files=[...new Set(evs.map(e=>e.file))],parts=[],labels=[];
   files.forEach((f,fi)=>{
-    const mine=evs.filter(e=>e.file===f),idx=fi+1,outs=mine.map((e,j)=>`f${fi}e${j}`);
+    const mine=evs.filter(e=>e.file===f),idx=fi+first,outs=mine.map((e,j)=>`f${fi}e${j}`);
     if(mine.length>1)parts.push(`[${idx}:a]asplit=${mine.length}${outs.map(o=>'['+o+'s]').join('')}`);
     mine.forEach((e,j)=>{
       const src=mine.length>1?`[${outs[j]}s]`:`[${idx}:a]`;
-      parts.push(`${src}aformat=sample_rates=48000:channel_layouts=stereo,adelay=${Math.round(e.to*1000)}:all=1,volume=${n3(e.vol)}[${outs[j]}]`);
+      parts.push(`${src}aformat=sample_rates=48000:channel_layouts=stereo,adelay=${Math.round(e.to*1000)}:all=1,asetpts=N/SR/TB,volume=${n3(e.vol)}[${outs[j]}]`);
       labels.push(`[${outs[j]}]`);
     });
   });
-  parts.push(`[0:a]${labels.join('')}amix=inputs=${labels.length+1}:duration=first:normalize=0[a]`);
+  parts.push(`${base}${labels.join('')}amix=inputs=${labels.length+1}:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
   return {files,graph:parts.join(';')};
 }
 // podział materiału na części: snap = tnij przy najbliższym cięciu, inaczej dokładnie po równo
@@ -316,6 +331,29 @@ function ovGraph(ovs,o,vf){
   parts.push(`[b${ovs.length}]format=yuv420p[vo]`);
   return parts.join(';');
 }
+// przenikanie dźwięku (J-cut): intro gra do końca, a pod jego końcem wjeżdża dźwięk montażu — bierzemy go ze źródła
+// z chwili tuż PRZED początkiem montażu, więc nie rozjeżdża się z obrazem. Dźwięk outro wjeżdża pod koniec montażu
+// (zaczyna się wcześniej niż jego obraz, więc kończy się `ovOut` s przed końcem obrazu outro).
+// Wejścia: tablica gotowych argumentów -i; wejście 0 to plik z obrazem, nasze numerujemy od `first`.
+function audioPlan(pt,o,pid,first=1){
+  if(!pt.hasIntro&&!pt.hasOutro)return null;
+  const id=pt.hasIntro?(o.intro.dur||0):0,dm=pt.dur,od=pt.hasOutro?(o.outro.dur||0):0;
+  const s0=pt.segs[0],ss0=Math.max(0,s0.src===1?s0.a:s0.a+o.offset),f0=s0.src===1?o.f1:o.f2;
+  let lead=pt.hasIntro?Math.min(Math.max(0,+o.ovIn||0),id,ss0):0;if(lead<0.05)lead=0;
+  const ovOut=pt.hasOutro?Math.min(Math.max(0,+o.ovOut||0),od,dm):0;
+  if(!lead&&!ovOut)return null;
+  const inputs=[],g=[],lab=[],fmt='aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo';
+  const add=(arg,filters,delay)=>{
+    inputs.push(arg);const n=first+inputs.length-1,l=`[ac${inputs.length}]`;
+    g.push(`[${n}:a]${fmt}${filters?','+filters:''}${delay>0.0005?`,adelay=${Math.round(delay*1000)}:all=1`:''},asetpts=N/SR/TB${l}`);lab.push(l);
+  };
+  if(pt.hasIntro)add('-i '+q('_seg/intro.mkv'),'',0);
+  if(lead)add(`-ss ${n3(ss0-lead)} -t ${n3(lead)} -i ${q(f0)}`,`afade=t=in:st=0:d=${n3(lead)}`,id-lead);
+  add('-i '+q(`_main${pid}.mkv`),ovOut?`afade=t=out:st=${n3(Math.max(0,dm-ovOut))}:d=${n3(ovOut)}`:'',id);
+  if(pt.hasOutro)add('-i '+q('_seg/outro.mkv'),ovOut?`afade=t=in:st=0:d=${n3(ovOut)}`:'',id+dm-ovOut);
+  g.push(`${lab.join('')}amix=inputs=${lab.length}:duration=longest:normalize=0,asetpts=N/SR/TB[abase]`);
+  return {inputs,graph:g,out:'[abase]'};
+}
 function genScript(plan,o){
   const vf=`scale=${o.W}:${o.H}:force_original_aspect_ratio=decrease,pad=${o.W}:${o.H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${o.fps},format=yuv420p`;
   const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
@@ -345,13 +383,24 @@ function genScript(plan,o){
     });
     if(pt.hasOutro)files.push('outro.mkv');
     L.push(`printf "file '%s'\\n" ${files.join(' ')} > _seg/list${pid}.txt`);
-    if(pt.events.length){
-      const sf=sfxFilter(pt.events);
-      L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list${pid}.txt -c copy _all${pid}.mkv`);
-      L.push(`ffmpeg -y -loglevel error -i _all${pid}.mkv ${sf.files.map(f=>'-i '+q(f)).join(' ')} -filter_complex "${sf.graph}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -movflags +faststart ${q(pt.out)}`);
-      L.push(`rm -f _all${pid}.mkv`);
+    const ap=audioPlan(pt,o,pid,1);
+    if(!ap&&!pt.events.length){
+      L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list${pid}.txt -c:v copy -c:a aac -b:a 192k ${q(pt.out)}`);
     }else{
-      L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list${pid}.txt -c:v copy -c:a aac -b:a 192k -movflags +faststart ${q(pt.out)}`);
+      L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/list${pid}.txt -c copy _all${pid}.mkv`);
+      const inputs=[`-i ${q('_all'+pid+'.mkv')}`],graph=[];let base='[0:a]';
+      if(ap){
+        const segFiles=files.filter(f=>/^p\d+_s/.test(f));
+        L.push(`printf "file '%s'\\n" ${segFiles.join(' ')} > _seg/listm${pid}.txt`);
+        L.push(`ffmpeg -y -loglevel error -f concat -safe 0 -i _seg/listm${pid}.txt -c copy _main${pid}.mkv`);
+        inputs.push(...ap.inputs);graph.push(...ap.graph);base=ap.out;
+      }
+      if(pt.events.length){
+        const sf=sfxFilter(pt.events,base,inputs.length);
+        inputs.push(...sf.files.map(f=>'-i '+q(f)));graph.push(sf.graph);
+      }else graph.push(`${base}anull[a]`);
+      L.push(`ffmpeg -y -loglevel error ${inputs.join(' ')} -filter_complex "${graph.join(';')}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k ${q(pt.out)}`);
+      L.push(`rm -f _all${pid}.mkv _main${pid}.mkv`);
     }
     L.push(`rm -f _seg/p${pid}_s*.mkv _seg/list${pid}.txt`);
   });
@@ -465,14 +514,15 @@ function recompute(){
   const o=offset(),inT=tv('tin'),outT=tv('tout');
   const hits=findAllHits(S.rules,S.w1,S.w2,o);S.hits=hits;
   const active=hits.filter(h=>!S.off.has(hitKey(h)));
-  S.segs=outT>inT?buildSegments(active,{minShot:+$('minshot').value||0,startSrc:+$('start').value,inT,outT}):[];
+  S.segs=outT>inT?buildSegments(active,{minShot:+$('minshot').value||0,startSrc:+$('start').value,inT,outT,autoSec:$('auto').checked?(+$('autosec').value||0):0}):[];
   S.events=sfxEvents(S.segs,S.rules,S.introDur||0);
   renderHits(inT,outT);renderTL(inT,outT);renderExport();
   $('seek').min=inT;$('seek').max=outT;
   const used=S.segs.length?S.segs.length-1:0;
   $('stat').textContent=`Trafień: ${hits.length} (zaznaczonych: ${active.length}) · cięć: ${used} · ujęć: ${S.segs.length} · długość: ${fmt(Math.max(0,outT-inT))}`;
 }
-['start','minshot'].forEach(id=>$(id).oninput=recompute);
+['start','minshot','autosec'].forEach(id=>$(id).oninput=recompute);
+$('auto').onchange=recompute;
 function renderRules(){
   const box=$('rules');box.innerHTML='';
   S.rules.forEach((r,i)=>{
@@ -524,7 +574,7 @@ $('tl').onclick=e=>{
 };
 
 // eksport
-const opts=()=>({overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+const opts=()=>({ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
 function loadExtra(kind,file){
   if(!file){S[kind+'F']='';S[kind+'Dur']=0;$('i'+kind).textContent='';recompute();return}
   const v=document.createElement('video');v.preload='metadata';v.src=URL.createObjectURL(file);
@@ -540,18 +590,19 @@ function renderExport(){
   tb.innerHTML='<tr><th>część</th><th>zakres (czas filmu 1)</th><th>długość materiału</th><th>z intro/outro</th><th>plik</th></tr>'+
     plan.map(p=>`<tr><td>${p.i+1}</td><td class="mono">${fmt(p.from)} – ${fmt(p.to)}</td><td class="mono">${fmt(p.dur)}</td><td class="mono">${fmt(p.total)}${p.hasIntro||p.hasOutro?' <span class="mut">('+[p.hasIntro?'intro':'',p.hasOutro?'outro':''].filter(Boolean).join('+')+')</span>':''}</td><td class="mono">${p.out.replace(/</g,'&lt;')}</td></tr>`).join('');
 }
-['W','H','ofps','enc','outn','nparts','psnap','pall'].forEach(id=>$(id).oninput=renderExport);
+['W','H','ofps','enc','outn','nparts','psnap','pall','ovin','ovout'].forEach(id=>$(id).oninput=renderExport);
 $('psnap').onchange=$('pall').onchange=renderExport;
 const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()};
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
   S.rules=p.rules||(p.q!=null?[{q:p.q,qsrc:p.qsrc||'1',act:'toggle'}]:S.rules);renderRules();
   S.ov=(p.overlays||[]).map(v=>({...v,url:null}));renderOvRows();updateOverlayView();
+  if(p.auto!=null)$('auto').checked=p.auto;for(const k of['autosec','ovin','ovout'])if(p[k]!=null)$(k).value=p[k];
   if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
