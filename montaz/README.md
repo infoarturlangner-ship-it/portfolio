@@ -75,6 +75,14 @@ Pliki mają nazwy `nazwa_cz01.mp4`, `nazwa_cz02.mp4` itd. Efekty dźwiękowe lic
 Skrypt kasuje pliki tymczasowe po każdej części, więc nie potrzebuje miejsca na cały materiał naraz.
 EDL jest zawsze dla całego montażu (intro raz na początku, outro raz na końcu).
 
+### Wznawianie renderu
+`render.sh` na starcie sprawdza, czy wszystkie potrzebne pliki (filmy, intro, outro, dźwięki, grafiki) leżą w folderze. Jeśli czegoś brakuje,
+wypisuje `BRAK PLIKU: …` i kończy od razu, zanim zacznie kodować.
+Gotowe fragmenty leżą w folderze `_seg/`. Po przerwaniu (Ctrl+C) albo błędzie wystarczy uruchomić `bash render.sh` jeszcze raz: skrypt pominie
+fragmenty i części, które są już gotowe, i dokończy resztę. Fragmenty są unieważniane, gdy zmienisz ustawienia kodowania (rozdzielczość, fps, enkoder,
+zakres, słowa, grafiki) — wtedy zaczyna od nowa. Jeśli podmienisz sam plik wideo, nie zmieniając jego nazwy, usuń folder `_seg` ręcznie.
+Po udanym renderze `_seg` jest kasowany.
+
 Dodatkowo: eksport EDL do DaVinci Resolve oraz zapis/wczytanie projektu (markery i ustawienia).
 
 ## Uwagi
