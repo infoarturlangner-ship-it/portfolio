@@ -53,6 +53,27 @@ Podgląd ma proporcje rozmiaru wyjściowego (pola rozdzielczości w sekcji „Ek
 Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
 wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).
 
+### Słowa: akcja „z tej transkrypcji” i tolerancja
+Akcja **„przejdź na film z tej transkrypcji”** (domyślna dla nowych słów) przełącza na film, z którego pochodzi transkrypcja z trafieniem.
+Pole **„ignoruj to samo słowo z drugiej transkrypcji przez … s”** (domyślnie 4 s) pomija to samo słowo wykryte w drugim filmie tuż po pierwszym
+(opóźnienie czatu), więc obraz nie wraca na poprzedni film. Powtórki w tej samej transkrypcji (np. „kontakt, kontakt”) zostają.
+Liczba pominiętych trafień jest widoczna w podsumowaniu nad listą trafień. 0 = wyłączone.
+
+### Efekt przy cięciu
+Sekcja „Efekt przy cięciu” (domyślnie wyłączona):
+- **rozjaśnienie** po każdym cięciu z płynnym powrotem do naturalnych kolorów; suwaki siły i czasu (ease-out);
+- **wideo z kanałem alfa**, które leży nad montażem i startuje od początku przy każdym cięciu. Zalecany format: **.mov ProRes 4444** (render sprawdzony
+  z ProRes 4444 i WebM VP9 z alfa). Przeglądarka może go nie odtworzyć w podglądzie (Chrome zwykle nie obsługuje ProRes) — wtedy podgląd pokazuje
+  samo rozjaśnienie, a nakładka pojawia się w renderze. Plik na pełny kadr, w proporcjach rozmiaru wyjściowego.
+Efekty nie dotyczą pierwszego ujęcia części ani intro/outro.
+
+### Zajawka „W dzisiejszym odcinku”
+Sekcja „Zajawka”: dla każdej części osobny zakres (od–do, czas filmu 1) gotowego montażu, który trafia na początek pliku. Kolejność w pliku:
+zajawka → intro z pliku → montaż → outro. Zajawka ma te same cięcia, grafiki, efekty i dźwięki co montaż. Opcjonalne wideo z alfa
+(napis „W dzisiejszym odcinku”) jest nałożone na zajawkę od jej początku. Przycisk **„▶ podgląd zajawki”** odtwarza wybrany zakres,
+a **„⬇ test: zajawka + intro + 10 s”** pobiera skrypt `render_test_czNN.sh`, który renderuje tylko `test_czNN.mp4`
+(zajawka + intro + pierwsze 10 s tej części, bez outro; własny folder roboczy `_segtest`, więc nie rusza głównego renderu).
+
 ### Automatyczna zmiana kamery
 W sekcji 3 zaznacz **„automatyczna zmiana kamery co … s"**. Jeśli przez podany czas żadne słowo nie przełączy obrazu,
 program przełączy go sam na drugi film (licznik zaczyna się od nowa po każdej zmianie, także tej od słowa).
