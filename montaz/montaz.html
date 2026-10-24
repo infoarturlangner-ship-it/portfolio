@@ -153,6 +153,17 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="mut" style="margin-bottom:8px">Dla każdej części osobno podajesz zakres montażu (czas filmu 1, np. <span class="mono">1:12:05</span>), który ma wejść na sam początek. To fragment gotowego montażu (z cięciami, grafikami i efektami), potem leci intro z pliku, a potem montaż. Zostaw puste, żeby nie było zajawki. Liczba części wynika z „podziel na części" w sekcji Eksport.</div>
 <div class="row" style="margin-bottom:8px"><label>wideo z alfa nałożone na zajawkę (np. napis „W dzisiejszym odcinku")</label><input type="file" id="txf" accept="video/*,.mov,.webm"><span class="mut" id="txi"></span></div>
 <div class="hitbox" style="max-height:260px"><table id="teasers"></table></div>
+<h2 style="margin-top:14px">Wybór zajawek przez ChatGPT</h2>
+<div class="mut" style="margin-bottom:8px">Program generuje plik z instrukcją, listą części i transkrypcją. Wgrywasz go do ChatGPT, a odpowiedź (JSON) wczytujesz tutaj, żeby czasy zajawek same się wpisały. Zrób to po ustawieniu podziału na części.</div>
+<div class="row" style="margin-bottom:8px">
+ <label>długość zajawki od</label><input type="number" id="gmin" value="15" min="3" style="width:60px"><label>do</label><input type="number" id="gmax" value="30" min="3" style="width:60px"><label>s</label>
+ <label>transkrypcja w pliku</label><select id="gsrc"><option value="1">film 1</option><option value="2">film 2</option><option value="3">oba (z oznaczeniem)</option></select>
+</div>
+<div class="row" style="margin-bottom:8px"><label>kontekst (opcjonalnie)</label><input type="text" id="gctx" placeholder="np. gra Fortnite, tryb kooperacyjny, dwóch graczy, polski komentarz" style="width:min(560px,100%)"></div>
+<div class="row" style="margin-bottom:8px"><button id="gptdl" class="pri">⬇ Pobierz instrukcję dla ChatGPT (.txt)</button><span class="mut" id="gptinfo"></span></div>
+<div class="row"><label>odpowiedź ChatGPT (plik .json/.txt)</label><input type="file" id="gptin" accept=".json,.txt"></div>
+<div class="row" style="margin-top:6px"><textarea id="gptpaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON)" style="height:80px"></textarea></div>
+<div class="row" style="margin-top:6px"><button id="gptload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="gptmsg"></span></div>
 </section>
 
 <section>
@@ -167,6 +178,15 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row" style="margin-bottom:8px">
  <label>intro (opcjonalnie)</label><input type="file" id="fintro" accept="video/*"><span class="mut" id="iintro"></span>
  <label>outro (opcjonalnie)</label><input type="file" id="foutro" accept="video/*"><span class="mut" id="ioutro"></span>
+</div>
+<div class="row" style="margin-bottom:8px">
+ <label>głośność muzyki intro %</label><input type="number" id="introvol" min="0" max="300" step="5" value="100" style="width:70px">
+ <label>outro %</label><input type="number" id="outrovol" min="0" max="300" step="5" value="100" style="width:70px">
+ <span class="mut">100 = bez zmian (powyżej 100 może przesterować)</span>
+</div>
+<div class="row" style="margin-bottom:8px">
+ <label>dźwięk intro wchodzi pod koniec zajawki (s)</label><input type="number" id="ovtz" min="0" step="0.1" value="1.5" style="width:70px">
+ <span class="mut">0 = intro startuje razem z obrazem. Wartość &gt; 0: dźwięk intro wjeżdża tyle sekund przed jego obrazem, a dźwięk zajawki się wycisza (obraz zmienia się twardo).</span>
 </div>
 <div class="row" style="margin-bottom:8px">
  <label>nakładanie dźwięku: intro → montaż (s)</label><input type="number" id="ovin" min="0" step="0.1" value="1.5" style="width:70px">
@@ -215,13 +235,37 @@ function parseJSON(j){
   return out;
 }
 function ts(h,m,s,f){return (+h||0)*3600+(+m)*60+(+s)+(+('0.'+f))}
-function parseSubs(text){
-  const out=[];const re=/(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})[^\n]*\n([\s\S]*?)(?=\n\s*\n|$)/g;let m;
-  text=text.replace(/\r/g,'');
+// bloki napisów; napisy automatyczne YouTube mają „roll-up” (każda linia wraca w kilku kolejnych blokach) — wtedy zostawiamy każdą linię raz
+function parseSubBlocks(text){
+  const re=/(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})[^\n]*\n([\s\S]*?)(?=\n\s*\n|$)/g;
+  text=text.replace(/\r/g,'');const blocks=[];let m;
   while((m=re.exec(text))){
     const a=ts(m[1],m[2],m[3],m[4]),b=ts(m[5],m[6],m[7],m[8]);
-    const t=m[9].replace(/<[^>]+>/g,'').replace(/\n/g,' ').trim();if(t)out.push(...splitWords(t,a,b));
+    blocks.push({a,b,ls:m[9].split('\n').map(l=>l.replace(/<[^>]+>/g,'').trim()).filter(Boolean)});
   }
+  let rep=0,cnt=0;
+  for(let i=1;i<blocks.length;i++){if(!blocks[i].ls.length)continue;cnt++;if(blocks[i-1].ls.includes(blocks[i].ls[0]))rep++}
+  if(cnt>=8&&rep/cnt>0.25){let prev=new Set();for(const bl of blocks){const cur=bl.ls;bl.ls=cur.filter(l=>!prev.has(l));prev=new Set(cur)}}
+  return blocks;
+}
+function parseSubs(text){
+  const out=[];
+  for(const b of parseSubBlocks(text)){const t=b.ls.join(' ');if(t)out.push(...splitWords(t,b.a,b.b))}
+  return out;
+}
+// linie transkrypcji {t0,t1,text} (do instrukcji dla ChatGPT); z JSON-a od Whispera grupujemy słowa
+function wordsToLines(words){
+  const out=[];let cur=null;
+  for(const w of words){
+    if(!cur||w.t0-cur.t1>1.0||cur.n>=12){cur={t0:w.t0,t1:w.t1,text:w.text,n:1};out.push(cur)}
+    else{cur.text+=' '+w.text;cur.t1=w.t1;cur.n++}
+  }
+  return out.map(l=>({t0:l.t0,t1:l.t1,text:l.text}));
+}
+function parseLines(txt){
+  txt=txt.replace(/^﻿/,'').trim();
+  if(txt[0]==='{'||txt[0]==='[')return wordsToLines(parseJSON(JSON.parse(txt)));
+  const out=[];for(const b of parseSubBlocks(txt))for(const l of b.ls)out.push({t0:b.a,t1:b.b,text:l});
   return out;
 }
 function parseTranscript(txt){
@@ -418,14 +462,15 @@ function audioPlan(pt,o,pid,first=1,T='_seg'){
   const s0=pt.segs[0],ss0=Math.max(0,s0.src===1?s0.a:s0.a+o.offset),f0=s0.src===1?o.f1:o.f2;
   let lead=pt.hasIntro?Math.min(Math.max(0,+o.ovIn||0),id,ss0):0;if(lead<0.05)lead=0;
   const ovOut=pt.hasOutro?Math.min(Math.max(0,+o.ovOut||0),od,dm):0;
-  if(!lead&&!ovOut)return null;
+  const ovT=(pt.teaser&&pt.teaser.length&&pt.hasIntro)?Math.min(Math.max(0,+o.ovTz||0),id,t0):0;
+  if(!lead&&!ovOut&&!ovT)return null;
   const inputs=[],g=[],lab=[],fmt='aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo';
   const add=(arg,filters,delay)=>{
     inputs.push(arg);const n=first+inputs.length-1,l=`[ac${inputs.length}]`;
     g.push(`[${n}:a]${fmt}${filters?','+filters:''}${delay>0.0005?`,adelay=${Math.round(delay*1000)}:all=1`:''},asetpts=N/SR/TB${l}`);lab.push(l);
   };
-  if(pt.teaser&&pt.teaser.length)add('-i '+q(`${T}_teaser${pid}.mkv`),'',0);
-  if(pt.hasIntro)add('-i '+q(`${T}/intro.mkv`),'',t0);
+  if(pt.teaser&&pt.teaser.length)add('-i '+q(`${T}_teaser${pid}.mkv`),ovT?`afade=t=out:st=${n3(Math.max(0,t0-ovT))}:d=${n3(ovT)}`:'',0);
+  if(pt.hasIntro)add('-i '+q(`${T}/intro.mkv`),ovT?`afade=t=in:st=0:d=${n3(ovT)}`:'',t0-ovT);
   if(lead)add(`-ss ${n3(ss0-lead)} -t ${n3(lead)} -i ${q(f0)}`,`afade=t=in:st=0:d=${n3(lead)}`,t0+id-lead);
   add('-i '+q(`${T}_main${pid}.mkv`),ovOut?`afade=t=out:st=${n3(Math.max(0,dm-ovOut))}:d=${n3(ovOut)}`:'',t0+id);
   if(pt.hasOutro)add('-i '+q(`${T}/outro.mkv`),ovOut?`afade=t=in:st=0:d=${n3(ovOut)}`:'',t0+id+dm-ovOut);
@@ -437,6 +482,7 @@ function hash32(s){let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeA
 // o.tmp = nazwa folderu roboczego (test używa innego niż pełny render)
 function genScript(plan,o){
   const T=o.tmp||'_seg';
+  const vol=v=>n3(Math.max(0,(v==null||v===''||isNaN(+v)?100:+v))/100);
   const vf=`scale=${o.W}:${o.H}:force_original_aspect_ratio=decrease,pad=${o.W}:${o.H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${o.fps},format=yuv420p`;
   const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
   const useIntro=plan.some(p=>p.hasIntro),useOutro=plan.some(p=>p.hasOutro);
@@ -444,8 +490,8 @@ function genScript(plan,o){
   const encBlocks=[],encSig=[];  // bloki kodowania z ochroną „jeśli jest, pomiń”; każdy blok to 4 linie
   const guard=(file,cmd)=>{encBlocks.push(`if [ ! -f ${T}/${file} ]; then`,'  '+cmd,`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');encSig.push(cmd)};
   const need=new Set();
-  if(useIntro){need.add(o.intro.f);guard('intro.mkv',`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv`)}
-  if(useOutro){need.add(o.outro.f);guard('outro.mkv',`enc_extra ${q(o.outro.f)} ${T}/outro.mkv.tmp.mkv`)}
+  if(useIntro){need.add(o.intro.f);guard('intro.mkv',`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`)}
+  if(useOutro){need.add(o.outro.f);guard('outro.mkv',`enc_extra ${q(o.outro.f)} ${T}/outro.mkv.tmp.mkv ${vol(o.outroVol)}`)}
   let blocks=(useIntro?1:0)+(useOutro?1:0);
   const partBlocks=plan.map(pt=>{
     const pid=String(pt.i+1).padStart(2,'0'),files=[],tfiles=[],B=[];
@@ -513,7 +559,7 @@ function genScript(plan,o){
   if(useIntro||useOutro){
     L.push('enc_extra() {',
       `  if ffmpeg -hide_banner -i "$1" 2>&1 | grep -q 'Audio:'; then`,
-      `    ffmpeg -y -loglevel error -i "$1" -vf "${vf}" -af "aresample=48000,aformat=channel_layouts=stereo" ${venc} -c:a pcm_s16le -f matroska "$2"`,
+      `    ffmpeg -y -loglevel error -i "$1" -vf "${vf}" -af "aresample=48000,aformat=channel_layouts=stereo,volume=$3" ${venc} -c:a pcm_s16le -f matroska "$2"`,
       '  else',
       `    ffmpeg -y -loglevel error -i "$1" -f lavfi -i anullsrc=r=48000:cl=stereo -shortest -map 0:v -map 1:a -vf "${vf}" ${venc} -c:a pcm_s16le -f matroska "$2"`,
       '  fi','}');
@@ -529,6 +575,56 @@ function genScript(plan,o){
   });
   L.push(`rm -rf ${T}`,`echo "Gotowe: ${echoSafe(plan.map(p=>p.out).join(', '))}"`);
   return L.join('\n');
+}
+// ---- instrukcja dla ChatGPT: części + transkrypcja; odpowiedź JSON z zajawkami wczytujemy z powrotem
+const hms=t=>fmtHMS(Math.floor(Math.max(0,t)));
+function buildGptPrompt(plan,{lines1=[],lines2=[],offset=0,src='1',min=15,max=30,ctx=''}){
+  const both=src==='3',use1=src!=='2',use2=src!=='1';
+  const lines=[];
+  if(use1)lines1.forEach(l=>lines.push({t:l.t0,text:l.text,tag:'F1'}));
+  if(use2)lines2.forEach(l=>lines.push({t:l.t0-offset,text:l.text,tag:'F2'}));
+  lines.sort((a,b)=>a.t-b.t);
+  const L=[];
+  L.push('# Zadanie: wybierz zajawki na początek odcinków','',
+   'Jesteś montażystą filmów na YouTube. Poniżej jest transkrypcja nagrania (rozmowa podczas wspólnej gry) podzielona na CZĘŚCI. Każda część to osobny odcinek.',
+   'Dla KAŻDEJ części wybierz najlepszy fragment na zajawkę („W dzisiejszym odcinku…”), który pojawi się na samym początku odcinka i zachęci widza do oglądania.','');
+  if(ctx.trim())L.push('Kontekst: '+ctx.trim(),'');
+  L.push('## Zasady wyboru zajawki',
+   '- Jedna zajawka na część: jeden ciągły zakres czasu („od”–„do”).',
+   '- Zajawka pochodzi z tej samej części, więc zakres musi mieścić się w czasie tej części (tabela poniżej).',
+   `- Długość zajawki: od ${min} do ${max} sekund.`,
+   '- Wybieraj najbardziej angażujące momenty: emocje, zwroty akcji, śmieszne lub zaskakujące sytuacje, mocne wypowiedzi, kulminacje. Unikaj ciszy, konfiguracji, nudnych wyjaśnień i przypadkowych dygresji.',
+   '- Początek i koniec dopasuj do granic zdań/linii, żeby fragment był zrozumiały sam w sobie i nie ucinał słowa w połowie.',
+   '- Jeśli się da, nie zdradzaj finału odcinka.',
+   '- Czasy w transkrypcji są przybliżone (±1–2 s), więc zostaw mały margines na początku i końcu.','',
+   '## Części (czas liczony od początku montażu)','','| część | od | do | długość |','|---|---|---|---|');
+  plan.forEach(p=>L.push(`| ${p.i+1} | ${hms(p.from)} | ${hms(p.to)} | ${hms(p.to-p.from)} |`));
+  L.push('','## Format odpowiedzi',
+   'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), dokładnie w tej strukturze. Czasy jako tekst „g:mm:ss” (np. "1:12:05"), możesz dodać ułamek sekundy ("1:12:05.5"):','',
+   '```json','{','  "zajawki": [',
+   '    { "czesc": 1, "od": "0:25:10", "do": "0:25:38", "powod": "jedno zdanie, dlaczego ten fragment" },',
+   '    { "czesc": 2, "od": "0:48:02", "do": "0:48:30", "powod": "..." }','  ]','}','```','',
+   'Pole "powod" jest tylko dla mnie. Musi być po jednym wpisie na każdą część ('+plan.map(p=>p.i+1).join(', ')+').','',
+   '## Transkrypcja','',
+   'Format linii: [g:mm:ss] tekst'+(both?' (F1 / F2 = źródło: film 1 lub film 2, obie rozmowy są z tego samego czasu)':'')+'. Czasy to ta sama oś czasu co w tabeli części i w odpowiedzi.','');
+  plan.forEach(p=>{
+    L.push(`### CZĘŚĆ ${p.i+1} (${hms(p.from)} – ${hms(p.to)})`,'');
+    lines.filter(l=>l.t>=p.from&&l.t<p.to).forEach(l=>L.push(`[${hms(l.t)}] ${both?l.tag+': ':''}${l.text}`));
+    L.push('');
+  });
+  return L.join('\n');
+}
+// odpowiedź ChatGPT -> [{part,a,b,why}] (tolerancyjnie: ``` ogrodzenia, polskie i angielskie klucze, czas jako tekst lub liczba)
+function parseTeaserJson(text){
+  const m=String(text).match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+  if(!m)throw new Error('nie znalazłem JSON-a');
+  const j=JSON.parse(m[0]);
+  const arr=Array.isArray(j)?j:(j.zajawki||j.teasers||j.parts||j.czesci||j['części']||[]);
+  const tm=v=>v==null?'':(typeof v==='number'?fmtHMS(v):String(v).trim());
+  const out=arr.map(x=>({part:+(x.czesc??x['część']??x.part??x.numer??x.nr),a:tm(x.od??x.from??x.start),b:tm(x['do']??x.to??x.end),why:x.powod??x['powód']??x.reason??''}))
+    .filter(x=>x.part>=1&&x.a&&x.b);
+  if(!out.length)throw new Error('JSON nie zawiera zajawek (czesc/od/do)');
+  return out;
 }
 function genEDL(segs,o){
   const fr=Math.round(o.fps);const tc=t=>{let f=Math.round(t*fr);const F=f%fr;f=(f-F)/fr;return [Math.floor(f/3600),Math.floor(f/60)%60,f%60,F].map(x=>String(x).padStart(2,'0')).join(':')};
@@ -557,7 +653,7 @@ function loadVideo(k,file){
   v.onloadedmetadata=()=>{$('i'+k).textContent=`${file.name} · ${v.videoWidth}×${v.videoHeight} · ${fmt(v.duration)}`;autoRange();recompute()};
 }
 async function loadTr(k,file){
-  try{S['w'+k]=parseTranscript(await file.text());$('i'+k).textContent=($('i'+k).textContent.split(' · transkr')[0])+` · transkr.: ${S['w'+k].length} słów`}
+  try{const txt=await file.text();S['w'+k]=parseTranscript(txt);S['l'+k]=parseLines(txt);$('i'+k).textContent=($('i'+k).textContent.split(' · transkr')[0])+` · transkr.: ${S['w'+k].length} słów`}
   catch(e){alert('Nie udało się wczytać transkrypcji: '+e.message)}
   recompute();
 }
@@ -717,7 +813,7 @@ $('tl').onclick=e=>{
 };
 
 // eksport
-const opts=()=>({flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+const opts=()=>({introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
 function loadExtra(kind,file){
   if(!file){S[kind+'F']='';S[kind+'Dur']=0;$('i'+kind).textContent='';recompute();return}
   const v=document.createElement('video');v.preload='metadata';v.src=URL.createObjectURL(file);
@@ -767,19 +863,20 @@ function renderExport(){
   tb.innerHTML='<tr><th>część</th><th>zakres (czas filmu 1)</th><th>długość materiału</th><th>z zajawką, intro i outro</th><th>plik</th></tr>'+
     plan.map(p=>`<tr><td>${p.i+1}</td><td class="mono">${fmt(p.from)} – ${fmt(p.to)}</td><td class="mono">${fmt(p.dur)}</td><td class="mono">${fmt(p.total)}${p.tdur||p.hasIntro||p.hasOutro?' <span class="mut">('+[p.tdur?'zajawka':'',p.hasIntro?'intro':'',p.hasOutro?'outro':''].filter(Boolean).join('+')+')</span>':''}</td><td class="mono">${p.out.replace(/</g,'&lt;')}</td></tr>`).join('');
 }
-['W','H','ofps','enc','outn','nparts','psnap','pall','ovin','ovout'].forEach(id=>$(id).oninput=renderExport);
+['W','H','ofps','enc','outn','nparts','psnap','pall','ovin','ovout','introvol','outrovol','ovtz'].forEach(id=>$(id).oninput=renderExport);
 $('psnap').onchange=$('pall').onchange=renderExport;
 const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()};
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
   S.rules=p.rules||(p.q!=null?[{q:p.q,qsrc:p.qsrc||'1',act:'toggle'}]:S.rules);renderRules();
   S.ov=(p.overlays||[]).map(v=>({...v,url:null}));renderOvRows();updateOverlayView();
   if(p.tol!=null)$('tol').value=p.tol;
+  for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
   if(p.flash){$('flashon').checked=!!p.flash.on;$('flashs').value=p.flash.strength;$('flashd').value=p.flash.dur;effLabels()}
   S.teasers=(p.teasers||[]).map(t=>({a:t.a||'',b:t.b||''}));S.fxName=p.fxName||'';S.txName=p.txName||'';
   if(p.auto!=null)$('auto').checked=p.auto;for(const k of['autosec','ovin','ovout'])if(p[k]!=null)$(k).value=p[k];
@@ -834,6 +931,33 @@ function renderOvRows(){
   });
 }
 $('addov').onclick=()=>{S.ov.push({name:'',url:null,film:'1',x:5,y:5,w:15,op:100});renderOvRows()};
+// instrukcja dla ChatGPT i wczytanie jego odpowiedzi
+$('gptdl').onclick=()=>{
+  const plan=planParts(S.segs,planOpts());
+  if(!plan.length){alert('Najpierw ustaw montaż (filmy, zakres, słowa) i podział na części.');return}
+  const src=$('gsrc').value;
+  const l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
+  if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
+  const txt=buildGptPrompt(plan,{lines1:l1,lines2:l2,offset:offset(),src,min:num($('gmin').value,15),max:num($('gmax').value,30),ctx:$('gctx').value});
+  dl('instrukcja_chatgpt.txt',txt);
+  $('gptinfo').textContent=` ${plan.length} części · ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
+};
+function applyTeaserList(list){
+  const plan=planParts(S.segs,planOpts()),warn=[];let ok=0;
+  for(const x of list){
+    if(x.part>plan.length&&plan.length){warn.push(`część ${x.part} nie istnieje (jest ${plan.length})`);continue}
+    while(S.teasers.length<x.part)S.teasers.push({a:'',b:''});
+    S.teasers[x.part-1]={a:x.a,b:x.b};ok++;
+    const p=plan[x.part-1],a=parseTime(x.a),b=parseTime(x.b);
+    if(!(b>a))warn.push(`część ${x.part}: „do” nie jest większe niż „od”`);
+    else if(p&&(a<p.from-1||b>p.to+1))warn.push(`część ${x.part}: zakres ${x.a}–${x.b} wychodzi poza część (${fmtHMS(p.from)}–${fmtHMS(p.to)})`);
+  }
+  renderTeaserRows(Math.max(1,plan.length||list.length));renderExport();
+  $('gptmsg').textContent=` Wczytano zajawek: ${ok}.`+(warn.length?' Uwaga: '+warn.join('; ')+'.':'');
+}
+function loadGptText(txt){try{applyTeaserList(parseTeaserJson(txt))}catch(e){$('gptmsg').textContent=' Nie udało się wczytać: '+e.message}}
+$('gptin').onchange=async e=>{const f=e.target.files[0];if(f)loadGptText(await f.text())};
+$('gptload').onclick=()=>loadGptText($('gptpaste').value);
 function fxFile(kind,file){
   const v=$(kind==='fx'?'fxv':'txv'),lab=$(kind==='fx'?'fxi':'txi'),nm=kind==='fx'?'fxName':'txName',ok=kind==='fx'?'fxOK':'txOK';
   if(!file){S[nm]='';S[ok]=false;v.removeAttribute('src');lab.textContent='';recompute();return}

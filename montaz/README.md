@@ -53,6 +53,21 @@ Podgląd ma proporcje rozmiaru wyjściowego (pola rozdzielczości w sekcji „Ek
 Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
 wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).
 
+### Głośność intro/outro i wejście dźwięku intro pod zajawką
+W sekcji „Eksport”: **głośność muzyki intro i outro** (w %, 100 = bez zmian) oraz **„dźwięk intro wchodzi pod koniec zajawki”** (sekundy, 0 = twarde cięcie).
+Przy wartości > 0 dźwięk intro wjeżdża tyle sekund przed jego obrazem, a dźwięk zajawki się wycisza; obraz zmienia się twardo.
+Dźwięk intro kończy się wtedy o tyle samo wcześniej niż jego obraz — przy domyślnych 1,5 s wchodzi w tym miejscu dźwięk montażu.
+
+### Wybór zajawek przez ChatGPT
+W sekcji „Zajawka” po ustawieniu podziału na części:
+1. ustaw długość zajawki (od–do), wybierz, z którego filmu ma być transkrypcja, dopisz opcjonalny kontekst;
+2. **„Pobierz instrukcję dla ChatGPT”** zapisuje `instrukcja_chatgpt.txt`: zadanie, zasady wyboru, tabelę części (czasy) i transkrypcję
+   każdej części z czasami (oś czasu montażu = czas filmu 1). Wgraj plik do ChatGPT;
+3. ChatGPT odpowiada JSON-em z jedną zajawką na część (`czesc`, `od`, `do`, `powod`);
+4. wczytaj odpowiedź (plik `.json`/`.txt` albo wklej tekst) — czasy wpiszą się w tabelę zajawek. Program ostrzega, gdy zakres wychodzi poza część.
+Czasy z napisów YouTube są przybliżone (linie, nie słowa), więc każdą zajawkę obejrzyj przyciskiem „▶ podgląd zajawki”.
+Napisy automatyczne YouTube mają powtarzające się linie („roll-up”); program wykrywa to i liczy każdą linię raz (dotyczy też wyszukiwania słów).
+
 ### Słowa: akcja „z tej transkrypcji” i tolerancja
 Akcja **„przejdź na film z tej transkrypcji”** (domyślna dla nowych słów) przełącza na film, z którego pochodzi transkrypcja z trafieniem.
 Pole **„ignoruj to samo słowo z drugiej transkrypcji przez … s”** (domyślnie 4 s) pomija to samo słowo wykryte w drugim filmie tuż po pierwszym
