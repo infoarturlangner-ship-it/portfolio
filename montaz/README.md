@@ -75,6 +75,8 @@ Sekcja „Najlepsze momenty (osobny film)”:
    gdy cicho (np. na tytułach) wraca do ustawionej głośności („czułość” = od jakiej głośności, „siła” = jak mocno, „powrót” = jak szybko).
 5. **Składanie:** opcjonalne intro i outro (pliki z sekcji „Eksport”, doklejane twardo), wersja dłuższa i/lub krótsza.
    „⬇ Pobierz render_momenty.sh” renderuje `momenty_dluzszy.mp4` i `momenty_krotszy.mp4`; „⬇ test” renderuje tytuł i 2 pierwsze momenty.
+Opcja **„muzyka z momentów gra od początku intro (dźwięk intro wyciszony)”** (domyślnie włączona): dźwięk z pliku intro jest wyciszony, a muzyka z sekcji momentów
+zaczyna się razem z intro i gra bez przerwy przez tytuł i momenty (ducking działa tylko od dźwięku momentów). „Muzyka intro” z sekcji „Eksport” nie dotyczy filmu z momentów.
 Momenty to wycinki gotowego głównego montażu: mają te same cięcia (słowa, auto-zmiana), grafiki, efekty przy cięciu i dźwięki. Momenty muszą mieścić się w zakresie „od–do” montażu.
 Skrypt wznawia się po błędzie i sprawdza pliki na starcie, tak jak główny render.
 

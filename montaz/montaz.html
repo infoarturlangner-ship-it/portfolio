@@ -232,12 +232,13 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <b>5. Składanie i render</b>
 <div class="row" style="margin:8px 0">
  <label><input type="checkbox" id="mintro"> intro na początku</label>
+ <label><input type="checkbox" id="mintromus" checked> muzyka z momentów gra od początku intro (dźwięk intro wyciszony)</label>
  <label><input type="checkbox" id="moutro"> outro na końcu</label>
  <label><input type="checkbox" id="mdl" checked> wersja dłuższa</label>
  <label><input type="checkbox" id="mds" checked> wersja krótsza</label>
  <label>nazwa plików</label><input type="text" id="mout" value="momenty" style="width:130px">
 </div>
-<div class="mut" style="margin-bottom:8px">Intro i outro to te same pliki co w sekcji „Eksport” (wczytaj je tam; głośność też stamtąd). Są doklejane twardo, bez nakładania dźwięku.</div>
+<div class="mut" style="margin-bottom:8px">Intro i outro to te same pliki co w sekcji „Eksport” (wczytaj je tam). Są doklejane twardo. Przy zaznaczonej opcji muzyki od początku intro dźwięk z pliku intro jest wyciszony, a muzyka z tej sekcji (z ducking tylko od momentów) gra już pod intro. „Muzyka intro” z sekcji „Eksport” nie dotyczy tego filmu.</div>
 <div class="row"><button id="mdlsh" class="pri">⬇ Pobierz render_momenty.sh</button><button id="mdltest">⬇ test: tytuł + 2 pierwsze momenty</button><span class="mut" id="mdlinfo"></span></div>
 </section>
 
@@ -803,8 +804,9 @@ function genMomentsScript(o){
   const need=new Set(),blocks=[],sig=[];
   const guard=(file,cmds,pre=[])=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,...pre.map(c=>'  '+c),...cmds.map(c=>'  '+c),`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(pre.concat(cmds).join('\n'))};
   const useIntro=!!(o.useIntro&&o.intro),useOutro=!!(o.useOutro&&o.outro);
-  const introFn=useIntro?encIntroLines(vf,venc,o):null;
-  if(useIntro){need.add(o.intro.f);if(introFn)need.add(o.introMusic.name);guard('intro.mkv',[introFn?`enc_intro ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv`:`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`])}
+  const overIntro=!!(o.music&&o.music.name&&useIntro&&o.musicOverIntro);   // muzyka z momentów gra od początku intro, dźwięk intro wyciszony
+  const introFn=(useIntro&&!overIntro)?encIntroLines(vf,venc,o):null;
+  if(useIntro){need.add(o.intro.f);if(introFn)need.add(o.introMusic.name);guard('intro.mkv',[introFn?`enc_intro ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv`:`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${overIntro?'0.000':vol(o.introVol)}`])}
   if(useOutro){need.add(o.outro.f);guard('outro.mkv',[`enc_extra ${q(o.outro.f)} ${T}/outro.mkv.tmp.mkv ${vol(o.outroVol)}`])}
   const tm=o.tm||{},bg=tm.bg||'blur',bgColor=(tm.bgColor||'#101010').replace('#','0x');
   const pngGuard=(name,b64)=>{blocks.push(`if [ ! -f ${T}/${name} ]; then`,`openssl base64 -d -A -out ${T}/${name} <<'B64EOF'`,b64,'B64EOF','fi');sig.push(name+hash32(b64))};
@@ -859,10 +861,10 @@ function genMomentsScript(o){
     const ev=v.lay.events;
     if(ev.length){const sf=sfxFilter(ev,'[b0]',1);sf.files.forEach(f=>{need.add(f);inputs.push('-i '+q(f))});g.push(sf.graph.replace(/\[a\]$/,'[key]'));key='[key]'}
     if(mu){
-      const L=v.lay,bl=L.bodyLen,fi=Math.min(+mu.fadeIn||0,bl/2),fo=Math.min(+mu.fadeOut||0,bl/2);
+      const L=v.lay,st=overIntro?0:L.bodyStart,bl=overIntro?L.bodyLen+L.bodyStart:L.bodyLen,fi=Math.min(+mu.fadeIn||0,bl/2),fo=Math.min(+mu.fadeOut||0,bl/2);
       const mi=inputs.length;inputs.push(`-stream_loop -1 -i ${q(mu.name)}`);
       g.push(`${key}asplit=2[k1][k2]`,
-        `[${mi}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=0:${n3(bl)},asetpts=N/SR/TB,volume=${vol(mu.vol)},afade=t=in:st=0:d=${n3(fi)},afade=t=out:st=${n3(Math.max(0,bl-fo))}:d=${n3(fo)},adelay=${Math.round(L.bodyStart*1000)}:all=1,apad=whole_dur=${n3(L.total)}[mus]`,
+        `[${mi}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=0:${n3(bl)},asetpts=N/SR/TB,volume=${vol(mu.vol)},afade=t=in:st=0:d=${n3(fi)},afade=t=out:st=${n3(Math.max(0,bl-fo))}:d=${n3(fo)},adelay=${Math.round(st*1000)}:all=1,apad=whole_dur=${n3(L.total)}[mus]`,
         `[mus][k1]sidechaincompress=threshold=${thr}:ratio=${ratio}:attack=${Math.round(+mu.attack||40)}:release=${Math.round(+mu.release||600)}:makeup=1[duck]`,
         `[k2][duck]amix=inputs=2:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
     }else g.push(`${key}anull[a]`);
@@ -1181,14 +1183,14 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
   S.rules=p.rules||(p.q!=null?[{q:p.q,qsrc:p.qsrc||'1',act:'toggle'}]:S.rules);renderRules();
   S.ov=(p.overlays||[]).map(v=>({...v,url:null}));renderOvRows();updateOverlayView();
   if(p.mset){for(const [k,v] of Object.entries(p.mset)){if($(k))$(k).value=v}for(const id of['mduck','mthr'])$(id+'v').textContent=$(id).value}
-  if(p.mchk){$('mintro').checked=!!p.mchk.intro;$('moutro').checked=!!p.mchk.outro;$('mdl').checked=p.mchk.dl!==false;$('mds').checked=p.mchk.ds!==false}
+  if(p.mchk){$('mintro').checked=!!p.mchk.intro;$('mintromus').checked=p.mchk.intromus!==false;$('moutro').checked=!!p.mchk.outro;$('mdl').checked=p.mchk.dl!==false;$('mds').checked=p.mchk.ds!==false}
   S.moms=(p.moms||[]).map(m=>({a:m.a||'',b:m.b||'',title:m.title||'',short:!!m.short}));renderMoms();
   if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
@@ -1365,7 +1367,7 @@ function momOpts(real){
   const mu=S.musicName?{name:S.musicName,vol:num($('mmvol').value,45),duck:num($('mduck').value,80),thr:num($('mthr').value,60),attack:40,release:num($('mrel').value,500),fadeIn:num($('mfin').value,1.5),fadeOut:num($('mfout').value,2)}:null;
   const mainTxt=$('mtitle').value.trim();
   return{...o,segs:S.segs,moments:ms,doLong:$('mdl').checked,doShort:$('mds').checked,out:$('mout').value||'momenty',
-    useIntro:$('mintro').checked&&!!o.intro,useOutro:$('moutro').checked&&!!o.outro,music:mu,
+    useIntro:$('mintro').checked&&!!o.intro,useOutro:$('moutro').checked&&!!o.outro,music:mu,musicOverIntro:$('mintromus').checked,introMusic:null,
     tm:{main:mainTxt?{png:real?b64Of(renderTitle('main',mainTxt)):'x',dur:num($('mdurmain').value,3.5),preset:$('manimmain').value}:null,
         mom:{png:ms.map(m=>m.title?(real?b64Of(renderTitle('mom',m.title)):'x'):''),dur:num($('mdurmom').value,2),preset:$('manimmom').value},
         bg:$('mbg').value,bgColor:$('mbgc').value}};
@@ -1414,7 +1416,7 @@ function momScript(test){
 }
 $('mdlsh').onclick=()=>{try{const s=momScript(false);dl('render_momenty.sh',s);$('mdlinfo').textContent=' '+Math.round(s.length/1024)+' KB'}catch(e){alert(e.message)}};
 $('mdltest').onclick=()=>{try{dl('render_momenty_test.sh',momScript(true))}catch(e){alert(e.message)}};
-['mmvol','mfin','mfout','mrel','mdurmain','mdurmom','mdl','mds','mintro','moutro','mbg'].forEach(id=>$(id).addEventListener('input',updateMomInfo));
+['mmvol','mfin','mfout','mrel','mdurmain','mdurmom','mdl','mds','mintro','mintromus','moutro','mbg'].forEach(id=>$(id).addEventListener('input',updateMomInfo));
 function fxFile(kind,file){
   const v=$(kind==='fx'?'fxv':'txv'),lab=$(kind==='fx'?'fxi':'txi'),nm=kind==='fx'?'fxName':'txName',ok=kind==='fx'?'fxOK':'txOK';
   if(!file){S[nm]='';S[ok]=false;v.removeAttribute('src');lab.textContent='';recompute();return}
