@@ -53,6 +53,11 @@ Podgląd ma proporcje rozmiaru wyjściowego (pola rozdzielczości w sekcji „Ek
 Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
 wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).
 
+### Muzyka intro
+W sekcji „Eksport” (przy intro) możesz wskazać osobny plik muzyki. Gra od początku intro (zapętlona, jeśli krótsza), miesza się z dźwiękiem z pliku intro albo go zastępuje
+(„wycisz oryginalny dźwięk intro”) i wycisza się na końcu intro (domyślnie 1,5 s). Działa też, gdy plik intro nie ma dźwięku. Dotyczy głównego renderu i filmu z momentów.
+Plik muzyki musi leżeć w folderze z filmami.
+
 ### Dźwięk cięcia: domyślny i własny dla słowa
 Nad listą słów jest **„Domyślny dźwięk cięcia”** (plik, głośność %, przesunięcie w sekundach, opcja „także przy cięciach automatycznych”). Gra przy każdym cięciu.
 Jeśli przy słowie wskażesz własny dźwięk, ma on pierwszeństwo tylko dla tego słowa; pole **„bez dźwięku”** wyłącza dźwięk dla słowa. Dotyczy też zajawek i filmu z momentów.

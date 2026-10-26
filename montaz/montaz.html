@@ -260,6 +260,13 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
  <span class="mut">100 = bez zmian (powyżej 100 może przesterować)</span>
 </div>
 <div class="row" style="margin-bottom:8px">
+ <label>muzyka intro (osobny plik z folderu z filmami)</label><input type="file" id="imfile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg"><span class="mut" id="imname"></span>
+ <label>głośność %</label><input type="number" id="imvol" value="100" min="0" max="300" step="5" style="width:70px">
+ <label>wyciszenie na końcu intro (s)</label><input type="number" id="imfo" value="1.5" min="0" step="0.5" style="width:60px">
+ <label><input type="checkbox" id="immute"> wycisz oryginalny dźwięk intro</label>
+</div>
+<div class="mut" style="margin-bottom:8px">Muzyka gra od początku intro (zapętlona, jeśli krótsza), miesza się z dźwiękiem z pliku intro (albo go zastępuje) i wycisza się na końcu intro. Dotyczy też filmu z momentów. Głośność dźwięku z pliku intro ustawiasz polem „głośność muzyki intro” wyżej.</div>
+<div class="row" style="margin-bottom:8px">
  <label>dźwięk intro wchodzi pod koniec zajawki (s)</label><input type="number" id="ovtz" min="0" step="0.1" value="1.5" style="width:70px">
  <span class="mut">0 = intro startuje razem z obrazem. Wartość &gt; 0: dźwięk intro wjeżdża tyle sekund przed jego obrazem, a dźwięk zajawki się wycisza (obraz zmienia się twardo).</span>
 </div>
@@ -558,6 +565,23 @@ function audioPlan(pt,o,pid,first=1,T='_seg'){
   g.push(`${lab.join('')}amix=inputs=${lab.length}:duration=longest:normalize=0,asetpts=N/SR/TB[abase]`);
   return {inputs,graph:g,out:'[abase]'};
 }
+const pctVol=v=>n3(Math.max(0,(v==null||v===''||isNaN(+v)?100:+v))/100);
+// koder intro z osobną muzyką: muzyka (zapętlona, z wyciszeniem na końcu intro) miksowana z dźwiękiem intro albo zamiast niego
+function encIntroLines(vf,venc,o){
+  const im=o.introMusic;if(!im||!im.name||!o.intro)return null;
+  const d=+(o.intro.dur)||0,fo=Math.max(0,+im.fo||0),fmt='aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo';
+  const mchain=`${fmt},volume=${pctVol(im.vol)}`+(d>0.5&&fo>0?`,afade=t=out:st=${n3(Math.max(0,d-fo))}:d=${n3(fo)}`:'');
+  const ochain=`${fmt},volume=${pctVol(o.introVol)}`;
+  const m=q(im.name);
+  return ['enc_intro() {',
+    `  if ffmpeg -hide_banner -i "$1" 2>&1 | grep -q 'Audio:'; then`,
+    im.mute
+      ?`    ffmpeg -y -loglevel error -i "$1" -stream_loop -1 -i ${m} -filter_complex "[0:v]${vf}[v];[1:a]${mchain}[a]" -map "[v]" -map "[a]" -shortest ${venc} -c:a pcm_s16le -f matroska "$2"`
+      :`    ffmpeg -y -loglevel error -i "$1" -stream_loop -1 -i ${m} -filter_complex "[0:v]${vf}[v];[1:a]${mchain}[m];[0:a]${ochain}[o];[o][m]amix=inputs=2:duration=longest:normalize=0[a]" -map "[v]" -map "[a]" -shortest ${venc} -c:a pcm_s16le -f matroska "$2"`,
+    '  else',
+    `    ffmpeg -y -loglevel error -i "$1" -stream_loop -1 -i ${m} -filter_complex "[0:v]${vf}[v];[1:a]${mchain}[a]" -map "[v]" -map "[a]" -shortest ${venc} -c:a pcm_s16le -f matroska "$2"`,
+    '  fi','}'];
+}
 function hash32(s){let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))|0;return (x>>>0).toString(16)}
 // skrypt: sprawdza pliki na starcie, a po przerwaniu/błędzie wznawia od ostatniego gotowego fragmentu.
 // o.tmp = nazwa folderu roboczego (test używa innego niż pełny render)
@@ -571,7 +595,8 @@ function genScript(plan,o){
   const encBlocks=[],encSig=[];  // bloki kodowania z ochroną „jeśli jest, pomiń”; każdy blok to 4 linie
   const guard=(file,cmd)=>{encBlocks.push(`if [ ! -f ${T}/${file} ]; then`,'  '+cmd,`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');encSig.push(cmd)};
   const need=new Set();
-  if(useIntro){need.add(o.intro.f);guard('intro.mkv',`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`)}
+  const introFn=useIntro?encIntroLines(vf,venc,o):null;
+  if(useIntro){need.add(o.intro.f);if(introFn)need.add(o.introMusic.name);guard('intro.mkv',introFn?`enc_intro ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv`:`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`)}
   if(useOutro){need.add(o.outro.f);guard('outro.mkv',`enc_extra ${q(o.outro.f)} ${T}/outro.mkv.tmp.mkv ${vol(o.outroVol)}`)}
   let blocks=(useIntro?1:0)+(useOutro?1:0);
   const partBlocks=plan.map(pt=>{
@@ -644,6 +669,7 @@ function genScript(plan,o){
       '  else',
       `    ffmpeg -y -loglevel error -i "$1" -f lavfi -i anullsrc=r=48000:cl=stereo -shortest -map 0:v -map 1:a -vf "${vf}" ${venc} -c:a pcm_s16le -f matroska "$2"`,
       '  fi','}');
+    if(introFn)L.push(...introFn);
   }
   let idx=0;const take=n=>{const out=encBlocks.slice(idx,idx+n*4);idx+=n*4;return out};
   if(useIntro)L.push(...take(1));
@@ -777,7 +803,8 @@ function genMomentsScript(o){
   const need=new Set(),blocks=[],sig=[];
   const guard=(file,cmds,pre=[])=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,...pre.map(c=>'  '+c),...cmds.map(c=>'  '+c),`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(pre.concat(cmds).join('\n'))};
   const useIntro=!!(o.useIntro&&o.intro),useOutro=!!(o.useOutro&&o.outro);
-  if(useIntro){need.add(o.intro.f);guard('intro.mkv',[`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`])}
+  const introFn=useIntro?encIntroLines(vf,venc,o):null;
+  if(useIntro){need.add(o.intro.f);if(introFn)need.add(o.introMusic.name);guard('intro.mkv',[introFn?`enc_intro ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv`:`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`])}
   if(useOutro){need.add(o.outro.f);guard('outro.mkv',[`enc_extra ${q(o.outro.f)} ${T}/outro.mkv.tmp.mkv ${vol(o.outroVol)}`])}
   const tm=o.tm||{},bg=tm.bg||'blur',bgColor=(tm.bgColor||'#101010').replace('#','0x');
   const pngGuard=(name,b64)=>{blocks.push(`if [ ! -f ${T}/${name} ]; then`,`openssl base64 -d -A -out ${T}/${name} <<'B64EOF'`,b64,'B64EOF','fi');sig.push(name+hash32(b64))};
@@ -860,6 +887,7 @@ function genMomentsScript(o){
       '  else',
       `    ffmpeg -y -loglevel error -i "$1" -f lavfi -i anullsrc=r=48000:cl=stereo -shortest -map 0:v -map 1:a -vf "${vf}" ${venc} -c:a pcm_s16le -f matroska "$2"`,
       '  fi','}');
+    if(introFn)L.push(...introFn);
   }
   L.push(...blocks);
   verBlocks.forEach(b=>{
@@ -1097,7 +1125,7 @@ $('tl').onclick=e=>{
 };
 
 // eksport
-const opts=()=>({defSfx:defSfxCfg(),introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+const opts=()=>({introMusic:S.imName?{name:S.imName,vol:num($('imvol').value,100),fo:num($('imfo').value,1.5),mute:$('immute').checked}:null,defSfx:defSfxCfg(),introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
 function loadExtra(kind,file){
   if(!file){S[kind+'F']='';S[kind+'Dur']=0;$('i'+kind).textContent='';recompute();return}
   const v=document.createElement('video');v.preload='metadata';v.src=URL.createObjectURL(file);
@@ -1153,7 +1181,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1163,6 +1191,7 @@ $('load').onchange=async e=>{
   if(p.mchk){$('mintro').checked=!!p.mchk.intro;$('moutro').checked=!!p.mchk.outro;$('mdl').checked=p.mchk.dl!==false;$('mds').checked=p.mchk.ds!==false}
   S.moms=(p.moms||[]).map(m=>({a:m.a||'',b:m.b||'',title:m.title||'',short:!!m.short}));renderMoms();
   if(p.mnames)S.musicName=p.mnames.musicName||'';
+  if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
@@ -1172,7 +1201,7 @@ $('load').onchange=async e=>{
   if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
-  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,p.defsfx&&p.defsfx.name,p.mnames&&p.mnames.musicName,p.mnames&&p.mnames.fontMain&&('czcionka: '+p.mnames.fontMain),p.mnames&&p.mnames.fontMom&&('czcionka: '+p.mnames.fontMom),...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
+  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,p.defsfx&&p.defsfx.name,p.intromusic&&p.intromusic.name,p.mnames&&p.mnames.musicName,p.mnames&&p.mnames.fontMain&&('czcionka: '+p.mnames.fontMain),p.mnames&&p.mnames.fontMom&&('czcionka: '+p.mnames.fontMom),...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
 };
 function stageRatio(){const w=+$('W').value||1920,hh=+$('H').value||1080;$('stage').style.aspectRatio=S.mode==='mon'?(w+'/'+hh):''}
 ['W','H'].forEach(id=>$(id).addEventListener('input',stageRatio));
@@ -1248,6 +1277,9 @@ function loadGptText(txt){try{applyTeaserList(parseTeaserJson(txt))}catch(e){$('
 $('gptin').onchange=async e=>{const f=e.target.files[0];if(f)loadGptText(await f.text())};
 $('gptload').onclick=()=>loadGptText($('gptpaste').value);
 // ====== najlepsze momenty (UI) ======
+S.imName='';
+$('imfile').onchange=e=>{const f=e.target.files[0];S.imName=f?f.name:'';$('imname').textContent=f?' '+f.name:'';renderExport()};
+['imvol','imfo'].forEach(id=>$(id).oninput=renderExport);$('immute').onchange=renderExport;
 S.defSfxName='';S.defSfxUrl=null;
 function defSfxCfg(){return S.defSfxName?{file:S.defSfxName,vol:num($('dsv').value,100),off:num($('dso').value,0),auto:$('dsa').checked}:null}
 $('dsf').onchange=e=>{const f=e.target.files[0];S.defSfxName=f?f.name:'';S.defSfxUrl=f?URL.createObjectURL(f):null;$('dsn').textContent=f?' '+f.name:'';recompute()};
