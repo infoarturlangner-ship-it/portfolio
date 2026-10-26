@@ -166,6 +166,75 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row" style="margin-top:6px"><button id="gptload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="gptmsg"></span></div>
 </section>
 
+<section id="momsec">
+<h2>Najlepsze momenty (osobny film)</h2>
+<div class="mut" style="margin-bottom:10px">Film z najśmieszniejszych/najciekawszych scen głównego montażu: tytuł → plansza z tytułem przed każdym momentem → moment → … Momenty wybiera ChatGPT na podstawie transkrypcji. Cięcia kamer, grafiki, efekty i dźwięki w momentach są takie same jak w głównym montażu (ustawiasz je wyżej). Powstają dwie wersje: dłuższa i krótsza.</div>
+
+<b>1. Wybór momentów przez ChatGPT</b>
+<div class="row" style="margin:8px 0">
+ <label>momentów w wersji dłuższej</label><input type="number" id="mnl" value="15" min="1" style="width:60px">
+ <label>w krótszej</label><input type="number" id="mns" value="8" min="1" style="width:60px">
+ <label>długość momentu od</label><input type="number" id="mmin" value="10" min="3" style="width:60px"><label>do</label><input type="number" id="mmax" value="40" min="3" style="width:60px"><label>s</label>
+ <label>wybierz</label><select id="mkind"><option value="mix">śmieszne i ciekawe</option><option value="funny">najśmieszniejsze</option><option value="interesting">najciekawsze</option></select>
+ <label>transkrypcja</label><select id="msrc"><option value="1">film 1</option><option value="2">film 2</option><option value="3">oba (z oznaczeniem)</option></select>
+</div>
+<div class="row" style="margin-bottom:8px"><label>kontekst (opcjonalnie)</label><input type="text" id="mctx" placeholder="np. gra Fortnite, dwóch graczy, polski komentarz" style="width:min(520px,100%)"></div>
+<div class="row" style="margin-bottom:8px"><button id="mgen" class="pri">⬇ Pobierz instrukcję dla ChatGPT (momenty)</button><span class="mut" id="mgeninfo"></span></div>
+<div class="row"><label>odpowiedź ChatGPT (plik .json/.txt)</label><input type="file" id="min"></div>
+<div class="row" style="margin-top:6px"><textarea id="mpaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON)" style="height:70px"></textarea></div>
+<div class="row" style="margin:6px 0 12px"><button id="mload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="mmsg"></span></div>
+
+<b>2. Lista momentów</b> <span class="mut">(możesz poprawiać czasy i tytuły, dodawać i usuwać)</span>
+<div class="hitbox" style="max-height:320px;margin:6px 0"><table id="moms"></table></div>
+<div class="row" style="margin-bottom:12px"><button id="maddm">+ dodaj moment</button><span class="mut" id="minfo"></span></div>
+
+<b>3. Tytuły i animacje</b>
+<div class="grid2" style="margin:8px 0">
+ <div class="mk">
+  <b>Tytuł główny (na początku)</b>
+  <div class="row"><label>tekst</label><input type="text" id="mtitle" value="Najlepsze momenty" style="width:min(260px,100%)"></div>
+  <div class="row"><label>czcionka (.ttf/.otf)</label><input type="file" id="mfontmain" accept=".ttf,.otf,.woff,.woff2"><span class="mut" id="mfontmaini"></span></div>
+  <div class="row"><label>wielkość (px przy 1080p)</label><input type="number" id="msizemain" value="120" min="10" style="width:75px">
+   <label>animacja</label><select id="manimmain"></select><label>czas (s)</label><input type="number" id="mdurmain" value="3.5" min="1" step="0.5" style="width:60px"></div>
+ </div>
+ <div class="mk">
+  <b>Tytuły momentów (plansza przed każdym)</b>
+  <div class="row"><label>czcionka (.ttf/.otf)</label><input type="file" id="mfontmom" accept=".ttf,.otf,.woff,.woff2"><span class="mut" id="mfontmomi"></span></div>
+  <div class="row"><label>wielkość (px przy 1080p)</label><input type="number" id="msizemom" value="90" min="10" style="width:75px">
+   <label>animacja</label><select id="manimmom"></select><label>plansza (s)</label><input type="number" id="mdurmom" value="2" min="1" step="0.5" style="width:60px"></div>
+ </div>
+</div>
+<div class="row" style="margin-bottom:8px">
+ <label>kolor tekstu</label><input type="color" id="mcol" value="#ffffff">
+ <label>obrys</label><input type="color" id="mocol" value="#000000"><label>grubość (px)</label><input type="number" id="mow" value="6" min="0" style="width:60px">
+ <label>tło planszy</label><select id="mbg"><option value="blur">rozmyta, przyciemniona klatka z momentu</option><option value="solid">jednolity kolor</option></select><input type="color" id="mbgc" value="#101020">
+</div>
+<div class="row" style="margin-bottom:6px"><button id="mprevmain">▶ podgląd tytułu głównego</button><button id="mprevmom">▶ podgląd tytułu momentu</button><span class="mut">Podgląd używa wybranej czcionki, wielkości, kolorów i animacji (tło w renderze to rozmyta klatka).</span></div>
+<div id="tpv" style="position:relative;width:min(640px,100%);overflow:hidden;border-radius:8px;background:#101020;margin-bottom:14px"><canvas id="tpvc" style="position:absolute;left:50%;top:50%;opacity:0"></canvas></div>
+
+<b>4. Muzyka</b>
+<div class="row" style="margin:8px 0"><label>plik muzyki (z folderu z filmami)</label><input type="file" id="mmusic" accept="audio/*,.mp3,.wav,.m4a"><span class="mut" id="mmusici"></span></div>
+<div class="row" style="margin-bottom:6px">
+ <label>głośność muzyki, gdy cicho %</label><input type="number" id="mmvol" value="45" min="0" max="300" step="5" style="width:70px">
+ <label>siła przyciszania</label><input type="range" id="mduck" min="0" max="100" value="80" style="width:110px"><span class="mono" id="mduckv">80</span>
+ <label>czułość</label><input type="range" id="mthr" min="0" max="100" value="60" style="width:110px"><span class="mono" id="mthrv">60</span>
+ <label>powrót (ms)</label><input type="number" id="mrel" value="500" min="50" step="50" style="width:70px">
+ <label>wejście/wyjście (s)</label><input type="number" id="mfin" value="1.5" min="0" step="0.5" style="width:55px"><input type="number" id="mfout" value="2" min="0" step="0.5" style="width:55px">
+</div>
+<div class="mut" style="margin-bottom:12px">Gdy w montażu pojawia się głośniejszy dźwięk (mowa, wybuch), muzyka sama się ścisza, a gdy jest cicho (np. na tytułach), wraca do ustawionej głośności. „Czułość” = od jakiej głośności montażu muzyka zaczyna się cofać; „siła” = jak mocno. Muzyka gra od tytułu do końca ostatniego momentu (zapętlona i przycinana).</div>
+
+<b>5. Składanie i render</b>
+<div class="row" style="margin:8px 0">
+ <label><input type="checkbox" id="mintro"> intro na początku</label>
+ <label><input type="checkbox" id="moutro"> outro na końcu</label>
+ <label><input type="checkbox" id="mdl" checked> wersja dłuższa</label>
+ <label><input type="checkbox" id="mds" checked> wersja krótsza</label>
+ <label>nazwa plików</label><input type="text" id="mout" value="momenty" style="width:130px">
+</div>
+<div class="mut" style="margin-bottom:8px">Intro i outro to te same pliki co w sekcji „Eksport” (wczytaj je tam; głośność też stamtąd). Są doklejane twardo, bez nakładania dźwięku.</div>
+<div class="row"><button id="mdlsh" class="pri">⬇ Pobierz render_momenty.sh</button><button id="mdltest">⬇ test: tytuł + 2 pierwsze momenty</button><span class="mut" id="mdlinfo"></span></div>
+</section>
+
 <section>
 <h2>4. Eksport</h2>
 <div class="row" style="margin-bottom:8px">
@@ -626,6 +695,203 @@ function parseTeaserJson(text){
   if(!out.length)throw new Error('JSON nie zawiera zajawek (czesc/od/do)');
   return out;
 }
+// ============ najlepsze momenty ============
+// animacje tytułów: stan w chwili t (s) dla planszy o długości D; dy w ułamkach wysokości kadru
+const easeOutBack=x=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+const ANIMS={slide:'wjazd z dołu + fade',pop:'pop (skalowanie ze sprężynką)',wipe:'odsłanianie od lewej',bounce:'odbicie z góry'};
+function animState(preset,t,D){
+  const fi=Math.min(1,t/0.35),fo=Math.min(1,Math.max(0,(D-t)/0.4)),a=Math.max(0,Math.min(fi,fo)),u=Math.min(1,t/0.6);
+  if(preset==='pop')return{a,s:Math.max(0.05,t<0.5?easeOutBack(t/0.5):1),dy:0,reveal:1};
+  if(preset==='wipe')return{a:Math.max(0,fo),s:1,dy:0,reveal:Math.min(1,t/0.8)};
+  if(preset==='bounce')return{a,s:1,dy:-0.3*Math.exp(-5*t)*Math.abs(Math.cos(11*t)),reveal:1};
+  return{a,s:1,dy:0.055*Math.pow(1-u,2),reveal:1};  // slide
+}
+// te same animacje jako filtry ffmpeg: chain (na strumieniu PNG z alfa) + wyrażenia x,y nakładki
+function ffAnim(preset,D,W,H){
+  const fin='fade=t=in:st=0:d=0.35:alpha=1',fout=`fade=t=out:st=${n3(Math.max(0,D-0.4))}:d=0.4:alpha=1`;
+  const cx='(W-w)/2',cy='(H-h)/2';
+  if(preset==='pop')return{chain:`format=rgba,scale=w='trunc(iw*max(0.05,if(lt(t,0.5),1+2.70158*pow(t/0.5-1,3)+1.70158*pow(t/0.5-1,2),1))/2)*2':h=-2:eval=frame,${fin},${fout}`,x:cx,y:cy};
+  if(preset==='wipe')return{chain:`format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lt(X,W*min(1,T/0.8)),alpha(X,Y),0)',${fout}`,x:cx,y:cy};
+  if(preset==='bounce')return{chain:`format=rgba,${fin},${fout}`,x:cx,y:`${cy}-${n3(0.3*H)}*exp(-5*t)*abs(cos(11*t))`};
+  return{chain:`format=rgba,${fin},${fout}`,x:cx,y:`${cy}+${n3(0.055*H)}*pow(max(0,1-t/0.6),2)`};
+}
+// komenda kodowania jednego ujęcia (do momentów); zwraca {cmd,need}
+function segCommand(o,vf,venc,s,tmpOut,cut){
+  const ss=Math.max(0,s.src===1?s.a:s.a+o.offset),dur=s.b-s.a,f=s.src===1?o.f1:o.f2;
+  const af=`aresample=48000,aformat=channel_layouts=stereo,afade=t=in:d=0.01,afade=t=out:st=${n3(Math.max(0,dur-0.01))}:d=0.01`;
+  const sv=segVideo(o,vf,s,{cut}),inA=`-ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)}`;
+  const need=[f,...(o.overlays||[]).filter(v=>v.name&&(v.film==='both'||+v.film===s.src)).map(v=>v.name)];
+  if(cut&&o.fx&&o.fx.name)need.push(o.fx.name);
+  const cmd=sv.graph
+    ?`ffmpeg -y -loglevel error ${inA} ${sv.inputs.join(' ')} -filter_complex "${sv.graph}" -map "[vo]" -map 0:a -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`
+    :`ffmpeg -y -loglevel error ${inA} -vf "${sv.vf}" -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`;
+  return{cmd,need};
+}
+// układ jednej wersji filmu z momentów: intro? -> tytuł -> (plansza + moment)* -> outro?
+function momentsLayout(o,moms){
+  const dMain=(o.tm&&o.tm.main&&o.tm.main.png)?(+o.tm.main.dur||3.5):0,dMom=+(o.tm&&o.tm.mom&&o.tm.mom.dur)||2;
+  const id=o.useIntro&&o.intro?(o.intro.dur||0):0,od=o.useOutro&&o.outro?(o.outro.dur||0):0;
+  let t=id+dMain;const items=[],events=[];
+  moms.forEach(m=>{
+    const clip=clipSegs(o.segs,m.a,m.b),dur=clip.reduce((a,s)=>a+s.b-s.a,0);
+    const hasCard=!!m.png;if(hasCard)t+=dMom;
+    events.push(...sfxEvents(clip,o.rules||[],t));
+    items.push({m,clip,dur,card:hasCard});
+    t+=dur;
+  });
+  const bodyLen=t-id,total=t+od;
+  return{items,events,bodyStart:id,bodyLen,total,dMain,dMom,id,od};
+}
+function momentsDurations(o){
+  const all=o.moments.map((m,i)=>({...m,png:(o.tm&&o.tm.mom&&o.tm.mom.png&&o.tm.mom.png[i])||''}));
+  return{long:momentsLayout(o,all),short:momentsLayout(o,all.filter(m=>m.short))};
+}
+function genMomentsScript(o){
+  const T=o.tmp||'_segmom',W=o.W,H=o.H,fps=o.fps;
+  const vf=`scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`;
+  const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
+  const vol=v=>n3(Math.max(0,(v==null||v===''||isNaN(+v)?100:+v))/100);
+  const base=(o.out||'momenty').replace(/\.mp4$/i,'');
+  const moms=o.moments.map((m,i)=>({...m,id:i+1,nn:String(i+1).padStart(2,'0'),png:(o.tm&&o.tm.mom&&o.tm.mom.png&&o.tm.mom.png[i])||''}));
+  const versions=[];
+  if(o.doLong)versions.push({tag:'dluzszy',ms:moms});
+  if(o.doShort)versions.push({tag:'krotszy',ms:moms.filter(m=>m.short)});
+  versions.forEach(v=>{v.out=`${base}_${v.tag}.mp4`;v.lay=momentsLayout(o,v.ms)});
+  const used=moms.filter(m=>versions.some(v=>v.ms.includes(m)));
+  const need=new Set(),blocks=[],sig=[];
+  const guard=(file,cmds,pre=[])=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,...pre.map(c=>'  '+c),...cmds.map(c=>'  '+c),`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(pre.concat(cmds).join('\n'))};
+  const useIntro=!!(o.useIntro&&o.intro),useOutro=!!(o.useOutro&&o.outro);
+  if(useIntro){need.add(o.intro.f);guard('intro.mkv',[`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`])}
+  if(useOutro){need.add(o.outro.f);guard('outro.mkv',[`enc_extra ${q(o.outro.f)} ${T}/outro.mkv.tmp.mkv ${vol(o.outroVol)}`])}
+  const tm=o.tm||{},bg=tm.bg||'blur',bgColor=(tm.bgColor||'#101010').replace('#','0x');
+  const pngGuard=(name,b64)=>{blocks.push(`if [ ! -f ${T}/${name} ]; then`,`openssl base64 -d -A -out ${T}/${name} <<'B64EOF'`,b64,'B64EOF','fi');sig.push(name+hash32(b64))};
+  const cardCmds=(file,pngName,clipFile,dur,preset)=>{
+    const an=ffAnim(preset,dur,W,H),pre=[];
+    let bgIn,bgF;
+    if(bg==='blur'&&clipFile){
+      const bgp=`${T}/${file}.bg.png`;
+      pre.push(`[ -f ${bgp} ] || ffmpeg -y -loglevel error -i ${T}/${clipFile} -frames:v 1 ${bgp}`);
+      bgIn=`-loop 1 -framerate ${fps} -t ${n3(dur)} -i ${bgp}`;bgF=`[0:v]scale=${W}:${H},setsar=1,boxblur=24:3,eq=brightness=-0.3[bg]`;
+    }else{
+      bgIn=`-f lavfi -t ${n3(dur)} -i color=c=${bgColor}:s=${W}x${H}:r=${fps}`;bgF=`[0:v]setsar=1[bg]`;
+    }
+    const cmd=`ffmpeg -y -loglevel error ${bgIn} -loop 1 -framerate ${fps} -t ${n3(dur)} -i ${T}/${pngName} -f lavfi -t ${n3(dur)} -i anullsrc=r=48000:cl=stereo -filter_complex "${bgF};[1:v]${an.chain}[t];[bg][t]overlay=x='${an.x}':y='${an.y}':format=auto,format=yuv420p,fps=${fps}[v]" -map "[v]" -map 2:a -c:v libx264 -crf 18 -preset medium -c:a pcm_s16le -t ${n3(dur)} ${T}/${file}.tmp.mkv`;
+    return{pre,cmd};
+  };
+  // klipy momentów
+  used.forEach((m,k)=>{
+    const clip=clipSegs(o.segs,m.a,m.b),names=[];
+    clip.forEach((s,j)=>{
+      const name=`m${m.nn}_s${String(j).padStart(4,'0')}.mkv`,sc=segCommand(o,vf,venc,s,`${T}/${name}.tmp.mkv`,j>0);
+      sc.need.forEach(f=>need.add(f));guard(name,[sc.cmd]);names.push(name);
+    });
+    const lst=`${T}/list${m.nn}.txt`;
+    guard(`clip${m.nn}.mkv`,[`ffmpeg -y -loglevel error -f concat -safe 0 -i ${lst} -c copy ${T}/clip${m.nn}.mkv.tmp.mkv`],[`printf "file '%s'\\n" ${names.join(' ')} > ${lst}`]);
+    m.clipFile=`clip${m.nn}.mkv`;m.hasClip=names.length>0;
+  });
+  // plansze: tytuł główny (tło z pierwszego użytego momentu) i tytuły momentów
+  let mainCard=false;
+  if(tm.main&&tm.main.png&&used.length){
+    pngGuard('t00.png',tm.main.png);const c=cardCmds('card00.mkv','t00.png',used[0].clipFile,+tm.main.dur||3.5,tm.main.preset);
+    guard('card00.mkv',[c.cmd],c.pre);mainCard=true;
+  }
+  used.forEach(m=>{
+    if(!m.png)return;
+    pngGuard(`t${m.nn}.png`,m.png);const c=cardCmds(`card${m.nn}.mkv`,`t${m.nn}.png`,m.clipFile,+(tm.mom&&tm.mom.dur)||2,tm.mom&&tm.mom.preset);
+    guard(`card${m.nn}.mkv`,[c.cmd],c.pre);m.hasCard=true;
+  });
+  // muzyka + miks
+  const mu=o.music&&o.music.name?o.music:null;if(mu)need.add(mu.name);
+  const thr=n3(Math.max(0.001,Math.min(1,0.2*Math.pow(0.05,(+mu?.thr||0)/100)))),ratio=n3(1+19*Math.max(0,Math.min(100,+mu?.duck||0))/100);
+  const verBlocks=versions.map(v=>{
+    const files=[];
+    if(useIntro)files.push('intro.mkv');
+    if(mainCard)files.push('card00.mkv');
+    v.ms.forEach(m=>{if(m.hasCard)files.push(`card${m.nn}.mkv`);files.push(m.clipFile)});
+    if(useOutro)files.push('outro.mkv');
+    const M=[`printf "file '%s'\\n" ${files.join(' ')} > ${T}/listV_${v.tag}.txt`,
+      `ffmpeg -y -loglevel error -f concat -safe 0 -i ${T}/listV_${v.tag}.txt -c copy ${T}_all_${v.tag}.mkv`];
+    const inputs=[`-i ${q(T+'_all_'+v.tag+'.mkv')}`],g=[`[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB[b0]`];
+    let key='[b0]';
+    const ev=v.lay.events;
+    if(ev.length){const sf=sfxFilter(ev,'[b0]',1);sf.files.forEach(f=>{need.add(f);inputs.push('-i '+q(f))});g.push(sf.graph.replace(/\[a\]$/,'[key]'));key='[key]'}
+    if(mu){
+      const L=v.lay,bl=L.bodyLen,fi=Math.min(+mu.fadeIn||0,bl/2),fo=Math.min(+mu.fadeOut||0,bl/2);
+      const mi=inputs.length;inputs.push(`-stream_loop -1 -i ${q(mu.name)}`);
+      g.push(`${key}asplit=2[k1][k2]`,
+        `[${mi}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=0:${n3(bl)},asetpts=N/SR/TB,volume=${vol(mu.vol)},afade=t=in:st=0:d=${n3(fi)},afade=t=out:st=${n3(Math.max(0,bl-fo))}:d=${n3(fo)},adelay=${Math.round(L.bodyStart*1000)}:all=1,apad=whole_dur=${n3(L.total)}[mus]`,
+        `[mus][k1]sidechaincompress=threshold=${thr}:ratio=${ratio}:attack=${Math.round(+mu.attack||40)}:release=${Math.round(+mu.release||600)}:makeup=1[duck]`,
+        `[k2][duck]amix=inputs=2:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
+    }else g.push(`${key}anull[a]`);
+    M.push(`ffmpeg -y -loglevel error ${inputs.join(' ')} -filter_complex "${g.join(';')}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k ${q(v.out)}`,`rm -f ${T}_all_${v.tag}.mkv`);
+    return{v,M,mix:hash32(M.join('\n'))};
+  });
+  const sigAll=hash32(vf+venc+sig.join('\n'));
+  const echoSafe=s=>s.replace(/["$`\\]/g,'');
+  const L=['#!/bin/bash','set -e',
+    '# 1) kontrola, czy wszystkie potrzebne pliki leżą w tym folderze',
+    'missing=0',
+    `for f in ${[...need].map(q).join(' ')}; do`,'  if [ ! -f "$f" ]; then echo "BRAK PLIKU: $f"; missing=1; fi','done',
+    'if [ $missing -ne 0 ]; then echo "Uzupełnij brakujące pliki w tym folderze i uruchom skrypt ponownie."; exit 1; fi',
+    '# 2) wznawianie: gotowe fragmenty w folderze roboczym są zachowane, dopóki ustawienia się nie zmienią',
+    `SIG="${sigAll}"`,
+    `if [ "$(cat ${T}/.sig 2>/dev/null)" != "$SIG" ]; then rm -rf ${T}; mkdir -p ${T}; echo "$SIG" > ${T}/.sig; fi`,
+    `rm -f ${T}_all_*.mkv ${T}/*.tmp.mkv`];
+  if(useIntro||useOutro){
+    L.push('enc_extra() {',
+      `  if ffmpeg -hide_banner -i "$1" 2>&1 | grep -q 'Audio:'; then`,
+      `    ffmpeg -y -loglevel error -i "$1" -vf "${vf}" -af "aresample=48000,aformat=channel_layouts=stereo,volume=$3" ${venc} -c:a pcm_s16le -f matroska "$2"`,
+      '  else',
+      `    ffmpeg -y -loglevel error -i "$1" -f lavfi -i anullsrc=r=48000:cl=stereo -shortest -map 0:v -map 1:a -vf "${vf}" ${venc} -c:a pcm_s16le -f matroska "$2"`,
+      '  fi','}');
+  }
+  L.push(...blocks);
+  verBlocks.forEach(b=>{
+    L.push(`if [ "$(cat ${T}/done_${b.v.tag} 2>/dev/null)" = "${b.mix}" ] && [ -f ${q(b.v.out)} ]; then`,`  echo "${echoSafe(b.v.out)} — już gotowe, pomijam"`,'else',`  echo "${echoSafe(b.v.out)}"`,
+      ...b.M.map(l=>'  '+l),`  echo "${b.mix}" > ${T}/done_${b.v.tag}`,'fi');
+  });
+  L.push(`rm -rf ${T}`,`echo "Gotowe: ${echoSafe(versions.map(v=>v.out).join(', '))}"`);
+  return L.join('\n');
+}
+// instrukcja dla ChatGPT: wybór najlepszych momentów
+function buildMomentsPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,nLong=15,nShort=8,min=10,max=40,kind='mix',ctx=''}){
+  const both=src==='3',lines=[];
+  if(src!=='2')lines1.forEach(l=>lines.push({t:l.t0,text:l.text,tag:'F1'}));
+  if(src!=='1')lines2.forEach(l=>lines.push({t:l.t0-offset,text:l.text,tag:'F2'}));
+  lines.sort((a,b)=>a.t-b.t);
+  const what={funny:'NAJŚMIESZNIEJSZE',interesting:'NAJCIEKAWSZE',mix:'NAJŚMIESZNIEJSZE i NAJCIEKAWSZE'}[kind]||'NAJŚMIESZNIEJSZE i NAJCIEKAWSZE';
+  const L=['# Zadanie: wybierz najlepsze momenty do filmu „Najlepsze momenty”','',
+   `Jesteś montażystą filmów na YouTube. Poniżej jest transkrypcja nagrania (rozmowa podczas wspólnej gry). Wybierz z niej ${what} sceny i przygotuj dwie wersje filmu z tych scen: dłuższą i krótszą.`,''];
+  if(ctx.trim())L.push('Kontekst: '+ctx.trim(),'');
+  L.push('## Zasady',
+   `- Wybierz DOKŁADNIE ${nLong} momentów do wersji dłuższej.`,
+   `- Spośród tych ${nLong} oznacz DOKŁADNIE ${nShort} NAJLEPSZYCH polem "krotszy": true (pozostałe "krotszy": false). To one wejdą do wersji krótszej.`,
+   `- Każdy moment to jeden ciągły zakres czasu o długości od ${min} do ${max} sekund.`,
+   '- Momenty nie mogą się nakładać; podaj je w kolejności chronologicznej.',
+   '- Początek i koniec dopasuj do granic zdań/linii: scena ma być zrozumiała sama w sobie (zawiązanie i puenta), bez ucinania słowa w połowie.',
+   '- Wybieraj momenty z wyraźnym efektem: żarty, wpadki, zaskoczenia, emocje, zwroty akcji, mocne teksty. Unikaj ciszy, konfiguracji i nudnych wyjaśnień.',
+   '- Dla każdego momentu wymyśl krótki, zabawny tytuł po polsku (maks. 7 słów, bez cudzysłowów i emoji), który zapowiada scenę, ale nie zdradza puenty.',
+   '- Czasy w transkrypcji są przybliżone (±1–2 s), więc zostaw mały margines.','',
+   '## Format odpowiedzi',
+   'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), dokładnie w tej strukturze. Czasy jako tekst „g:mm:ss” (np. "1:12:05"), możesz dodać ułamek sekundy:','',
+   '```json','{','  "momenty": [',
+   '    { "od": "0:11:03", "do": "0:11:29", "tytul": "Gdzie jest moja tarcza", "krotszy": true },',
+   '    { "od": "0:25:40", "do": "0:26:05", "tytul": "Atak tańczącego snajpera", "krotszy": false }','  ]','}','```','',
+   '## Transkrypcja','',
+   'Format linii: [g:mm:ss] tekst'+(both?' (F1 / F2 = źródło: film 1 lub film 2, obie rozmowy są z tego samego czasu)':'')+'. Czasy dotyczą osi czasu montażu (taka sama jak w odpowiedzi).','');
+  lines.filter(l=>l.t>=inT&&l.t<outT).forEach(l=>L.push(`[${hms(l.t)}] ${both?l.tag+': ':''}${l.text}`));
+  return L.join('\n');
+}
+function parseMomentsJson(text){
+  const m=String(text).match(/\{[\s\S]*\}|\[[\s\S]*\]/);if(!m)throw new Error('nie znalazłem JSON-a');
+  const j=JSON.parse(m[0]);
+  const arr=Array.isArray(j)?j:(j.momenty||j.moments||j.klipy||j.clips||[]);
+  const tm=v=>v==null?'':(typeof v==='number'?fmtHMS(v):String(v).trim());
+  const out=arr.map(x=>({a:tm(x.od??x.from??x.start),b:tm(x['do']??x.to??x.end),title:String(x.tytul??x['tytuł']??x.title??'').trim(),
+    short:!!(x.krotszy??x['krótszy']??x.short??x.shorter)})).filter(x=>x.a&&x.b);
+  if(!out.length)throw new Error('JSON nie zawiera momentów (od/do/tytul)');
+  return out;
+}
 function genEDL(segs,o){
   const fr=Math.round(o.fps);const tc=t=>{let f=Math.round(t*fr);const F=f%fr;f=(f-F)/fr;return [Math.floor(f/3600),Math.floor(f/60)%60,f%60,F].map(x=>String(x).padStart(2,'0')).join(':')};
   const ev=[];
@@ -857,7 +1123,7 @@ function renderExport(){
   const o=opts(),po=planOpts(),plan=planParts(S.segs,po);
   const nRows=Math.max(1,plan.length||po.n);
   if(document.querySelectorAll('#teasers tr[data-i]').length!==nRows)renderTeaserRows(nRows);
-  updateTeaserInfo(plan);
+  updateTeaserInfo(plan);if(typeof updateMomInfo==='function')updateMomInfo();
   $('script').value=plan.length?genScript(plan,o):'(brak ujęć — wczytaj filmy, ustaw zakres i wyszukaj słowo)';
   const tb=$('partsinfo');
   tb.innerHTML='<tr><th>część</th><th>zakres (czas filmu 1)</th><th>długość materiału</th><th>z zajawką, intro i outro</th><th>plik</th></tr>'+
@@ -869,12 +1135,16 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
   S.rules=p.rules||(p.q!=null?[{q:p.q,qsrc:p.qsrc||'1',act:'toggle'}]:S.rules);renderRules();
   S.ov=(p.overlays||[]).map(v=>({...v,url:null}));renderOvRows();updateOverlayView();
+  if(p.mset){for(const [k,v] of Object.entries(p.mset)){if($(k))$(k).value=v}for(const id of['mduck','mthr'])$(id+'v').textContent=$(id).value}
+  if(p.mchk){$('mintro').checked=!!p.mchk.intro;$('moutro').checked=!!p.mchk.outro;$('mdl').checked=p.mchk.dl!==false;$('mds').checked=p.mchk.ds!==false}
+  S.moms=(p.moms||[]).map(m=>({a:m.a||'',b:m.b||'',title:m.title||'',short:!!m.short}));renderMoms();
+  if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
   if(p.flash){$('flashon').checked=!!p.flash.on;$('flashs').value=p.flash.strength;$('flashd').value=p.flash.dur;effLabels()}
@@ -883,7 +1153,7 @@ $('load').onchange=async e=>{
   if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
-  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
+  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,p.mnames&&p.mnames.musicName,p.mnames&&p.mnames.fontMain&&('czcionka: '+p.mnames.fontMain),p.mnames&&p.mnames.fontMom&&('czcionka: '+p.mnames.fontMom),...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
 };
 function stageRatio(){const w=+$('W').value||1920,hh=+$('H').value||1080;$('stage').style.aspectRatio=S.mode==='mon'?(w+'/'+hh):''}
 ['W','H'].forEach(id=>$(id).addEventListener('input',stageRatio));
@@ -958,6 +1228,138 @@ function applyTeaserList(list){
 function loadGptText(txt){try{applyTeaserList(parseTeaserJson(txt))}catch(e){$('gptmsg').textContent=' Nie udało się wczytać: '+e.message}}
 $('gptin').onchange=async e=>{const f=e.target.files[0];if(f)loadGptText(await f.text())};
 $('gptload').onclick=()=>loadGptText($('gptpaste').value);
+// ====== najlepsze momenty (UI) ======
+S.moms=[];S.fonts={main:null,mom:null};
+for(const id of['manimmain','manimmom'])$(id).innerHTML=Object.entries(ANIMS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+$('manimmom').value='pop';
+async function loadFont(kind,file){
+  const lab=$(kind==='main'?'mfontmaini':'mfontmomi');
+  if(!file){S.fonts[kind]=null;lab.textContent='';return}
+  try{
+    const fam='MomFont_'+kind+'_'+Date.now(),ff=new FontFace(fam,await file.arrayBuffer());await ff.load();document.fonts.add(ff);
+    S.fonts[kind]={name:file.name,family:fam};lab.textContent=' '+file.name+' ✓';
+  }catch(e){S.fonts[kind]=null;lab.textContent=' nie udało się wczytać czcionki';}
+}
+$('mfontmain').onchange=e=>loadFont('main',e.target.files[0]);
+$('mfontmom').onchange=e=>loadFont('mom',e.target.files[0]);
+// rysuje tytuł do canvasu (to samo trafia do podglądu i do renderu jako PNG z alfa)
+function renderTitle(kind,text){
+  const Wd=+$('W').value||1920,Hd=+$('H').value||1080,k=Hd/1080;
+  const size=Math.max(8,(+$(kind==='main'?'msizemain':'msizemom').value||90)*k),sw=Math.max(0,(+$('mow').value||0)*k);
+  const fam=(S.fonts[kind]?S.fonts[kind].family+',':'')+'Arial,Helvetica,sans-serif';
+  const c=document.createElement('canvas'),x=c.getContext('2d');
+  x.font=`700 ${size}px ${fam}`;
+  const maxW=Wd*0.8,words=String(text).split(/\s+/).filter(Boolean),lines=[];let cur='';
+  for(const w of words){const t=cur?cur+' '+w:w;if(cur&&x.measureText(t).width>maxW){lines.push(cur);cur=w}else cur=t}
+  if(cur)lines.push(cur);
+  const lh=size*1.2,pad=Math.ceil(sw+size*0.15);
+  const tw=Math.max(...lines.map(l=>x.measureText(l).width),1);
+  c.width=Math.ceil(tw+2*pad);c.height=Math.ceil(lh*lines.length+2*pad);
+  x.font=`700 ${size}px ${fam}`;x.textAlign='center';x.textBaseline='middle';x.lineJoin='round';
+  lines.forEach((l,i)=>{
+    const cx=c.width/2,cy=pad+lh*(i+0.5);
+    if(sw>0){x.lineWidth=sw*2;x.strokeStyle=$('mocol').value;x.strokeText(l,cx,cy)}
+    x.fillStyle=$('mcol').value;x.fillText(l,cx,cy);
+  });
+  return c;
+}
+const b64Of=c=>c.toDataURL('image/png').split(',')[1];
+let prevRaf=0;
+function playTitlePreview(kind){
+  const text=kind==='main'?($('mtitle').value||'Tytuł'):((S.moms[0]&&S.moms[0].title)||'Przykładowy tytuł momentu');
+  const preset=$(kind==='main'?'manimmain':'manimmom').value,D=+$(kind==='main'?'mdurmain':'mdurmom').value||2;
+  const box=$('tpv'),Wd=+$('W').value||1920,Hd=+$('H').value||1080;
+  box.style.aspectRatio=Wd+'/'+Hd;box.style.background=$('mbg').value==='solid'?$('mbgc').value:'#202033';
+  const src=renderTitle(kind,text),cv=$('tpvc');
+  cv.width=src.width;cv.height=src.height;cv.getContext('2d').drawImage(src,0,0);
+  cv.style.width=(src.width/Wd*100)+'%';cv.style.height='auto';
+  cancelAnimationFrame(prevRaf);const t0=performance.now();
+  const tick=()=>{
+    const t=(performance.now()-t0)/1000;if(t>=D){cv.style.opacity=0;return}
+    const st=animState(preset,t,D),bh=box.clientHeight;
+    cv.style.opacity=st.a;cv.style.transform=`translate(-50%,-50%) translateY(${st.dy*bh}px) scale(${st.s})`;
+    cv.style.clipPath=st.reveal<1?`inset(0 ${(1-st.reveal)*100}% 0 0)`:'none';
+    prevRaf=requestAnimationFrame(tick);
+  };
+  tick();
+}
+$('mprevmain').onclick=()=>playTitlePreview('main');
+$('mprevmom').onclick=()=>playTitlePreview('mom');
+// lista momentów
+function renderMoms(){
+  const tb=$('moms');tb.innerHTML='<tr><th>#</th><th>od</th><th>do</th><th>dł.</th><th>tytuł</th><th>krótszy</th><th></th><th></th></tr>';
+  S.moms.forEach((m,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td><input type="text" class="ma" style="width:88px"></td><td><input type="text" class="mb" style="width:88px"></td><td class="mono ml">—</td>
+      <td><input type="text" class="mt" style="width:min(340px,40vw)"></td><td><input type="checkbox" class="ms"></td><td><button class="mp">▶</button></td><td><button class="mx">✕</button></td>`;
+    const ma=tr.querySelector('.ma'),mb=tr.querySelector('.mb'),mt=tr.querySelector('.mt'),ms=tr.querySelector('.ms');
+    ma.value=m.a;mb.value=m.b;mt.value=m.title;ms.checked=!!m.short;
+    const upd=()=>{const d=parseTime(mb.value)-parseTime(ma.value);tr.querySelector('.ml').textContent=d>0?fmt(d):'—';};upd();
+    ma.oninput=()=>{m.a=ma.value;upd();updateMomInfo()};mb.oninput=()=>{m.b=mb.value;upd();updateMomInfo()};
+    mt.oninput=()=>{m.title=mt.value;updateMomInfo()};ms.onchange=()=>{m.short=ms.checked;updateMomInfo()};
+    tr.querySelector('.mp').onclick=()=>previewRange(parseTime(m.a),parseTime(m.b),false);
+    tr.querySelector('.mx').onclick=()=>{S.moms.splice(i,1);renderMoms();updateMomInfo()};
+    tb.appendChild(tr);
+  });
+  updateMomInfo();
+}
+$('maddm').onclick=()=>{S.moms.push({a:'',b:'',title:'',short:false});renderMoms()};
+function momOpts(real){
+  const o=opts(),ms=S.moms.map(m=>({a:parseTime(m.a),b:parseTime(m.b),title:m.title.trim(),short:!!m.short})).filter(m=>m.b>m.a);
+  const png=real?(kind=>t=>b64Of(renderTitle(kind,t))):null;
+  const mu=S.musicName?{name:S.musicName,vol:num($('mmvol').value,45),duck:num($('mduck').value,80),thr:num($('mthr').value,60),attack:40,release:num($('mrel').value,500),fadeIn:num($('mfin').value,1.5),fadeOut:num($('mfout').value,2)}:null;
+  const mainTxt=$('mtitle').value.trim();
+  return{...o,segs:S.segs,moments:ms,doLong:$('mdl').checked,doShort:$('mds').checked,out:$('mout').value||'momenty',
+    useIntro:$('mintro').checked&&!!o.intro,useOutro:$('moutro').checked&&!!o.outro,music:mu,
+    tm:{main:mainTxt?{png:real?b64Of(renderTitle('main',mainTxt)):'x',dur:num($('mdurmain').value,3.5),preset:$('manimmain').value}:null,
+        mom:{png:ms.map(m=>m.title?(real?b64Of(renderTitle('mom',m.title)):'x'):''),dur:num($('mdurmom').value,2),preset:$('manimmom').value},
+        bg:$('mbg').value,bgColor:$('mbgc').value}};
+}
+function updateMomInfo(){
+  const el=$('minfo');if(!el)return;
+  const mo=momOpts(false);
+  if(!mo.moments.length){el.textContent=' brak poprawnych momentów';return}
+  const d=momentsDurations(mo),outside=mo.moments.filter(m=>!S.segs.some(s=>s.b>m.a&&s.a<m.b)).length;
+  el.textContent=` dłuższa: ${mo.moments.length} momentów, ${fmt(d.long.total)} · krótsza: ${mo.moments.filter(m=>m.short).length} momentów, ${fmt(d.short.total)}`+(outside?` · UWAGA: ${outside} momentów poza zakresem montażu`:'');
+}
+// ChatGPT: instrukcja i odpowiedź
+$('mgen').onclick=()=>{
+  if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
+  const src=$('msrc').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
+  if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
+  const txt=buildMomentsPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),nLong:num($('mnl').value,15),nShort:num($('mns').value,8),min:num($('mmin').value,10),max:num($('mmax').value,40),kind:$('mkind').value,ctx:$('mctx').value});
+  dl('instrukcja_chatgpt_momenty.txt',txt);
+  $('mgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
+};
+function loadMomText(txt){
+  try{
+    const list=parseMomentsJson(txt);list.sort((a,b)=>parseTime(a.a)-parseTime(b.a));
+    S.moms=list.map(x=>({a:x.a,b:x.b,title:x.title,short:x.short}));renderMoms();
+    const bad=S.moms.filter(m=>!(parseTime(m.b)>parseTime(m.a))).length;
+    $('mmsg').textContent=` Wczytano momentów: ${S.moms.length} (w krótszej: ${S.moms.filter(m=>m.short).length}).`+(bad?` Uwaga: ${bad} z błędnym zakresem.`:'');
+  }catch(e){$('mmsg').textContent=' Nie udało się wczytać: '+e.message}
+}
+$('min').onchange=async e=>{const f=e.target.files[0];if(f)loadMomText(await f.text())};
+$('mload').onclick=()=>loadMomText($('mpaste').value);
+// muzyka, etykiety
+S.musicName='';
+$('mmusic').onchange=e=>{const f=e.target.files[0];S.musicName=f?f.name:'';$('mmusici').textContent=f?' '+f.name:'';updateMomInfo()};
+for(const [id,vid] of [['mduck','mduckv'],['mthr','mthrv']])$(id).addEventListener('input',()=>{$(vid).textContent=$(id).value});
+// skrypty
+function momScript(test){
+  const mo=momOpts(true);
+  if(!mo.moments.length)throw new Error('Dodaj przynajmniej jeden moment (poprawne „od” < „do”).');
+  if(!S.segs.length)throw new Error('Najpierw ustaw montaż (filmy, zakres „od–do”).');
+  if(test){mo.moments=mo.moments.slice(0,2).map(m=>({...m,short:true}));mo.tm.mom.png=mo.tm.mom.png.slice(0,2);mo.doLong=true;mo.doShort=false;mo.tmp='_segmomtest';mo.out=(mo.out||'momenty')+'_test'}
+  else{
+    if(!mo.doLong&&!mo.doShort)throw new Error('Zaznacz wersję dłuższą i/lub krótszą.');
+    if(mo.doShort&&!mo.moments.some(m=>m.short)&&!mo.doLong)throw new Error('Żaden moment nie jest oznaczony jako „krótszy”.');
+  }
+  return genMomentsScript(mo);
+}
+$('mdlsh').onclick=()=>{try{const s=momScript(false);dl('render_momenty.sh',s);$('mdlinfo').textContent=' '+Math.round(s.length/1024)+' KB'}catch(e){alert(e.message)}};
+$('mdltest').onclick=()=>{try{dl('render_momenty_test.sh',momScript(true))}catch(e){alert(e.message)}};
+['mmvol','mfin','mfout','mrel','mdurmain','mdurmom','mdl','mds','mintro','moutro','mbg'].forEach(id=>$(id).addEventListener('input',updateMomInfo));
 function fxFile(kind,file){
   const v=$(kind==='fx'?'fxv':'txv'),lab=$(kind==='fx'?'fxi':'txi'),nm=kind==='fx'?'fxName':'txName',ok=kind==='fx'?'fxOK':'txOK';
   if(!file){S[nm]='';S[ok]=false;v.removeAttribute('src');lab.textContent='';recompute();return}
@@ -971,7 +1373,7 @@ $('txf').onchange=e=>fxFile('tx',e.target.files[0]);
 function effLabels(){$('flashsv').textContent=$('flashs').value+'%';$('flashdv').textContent=(+$('flashd').value).toFixed(2)+' s'}
 ['flashon','flashs','flashd'].forEach(id=>$(id).addEventListener('input',()=>{effLabels();recompute()}));
 $('flashon').addEventListener('change',recompute);
-renderRules();setMode('cal');recompute();
+renderRules();renderMoms();setMode('cal');recompute();
 </script>
 </body>
 </html>

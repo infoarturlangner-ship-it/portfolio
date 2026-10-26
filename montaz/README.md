@@ -53,6 +53,21 @@ Podgląd ma proporcje rozmiaru wyjściowego (pola rozdzielczości w sekcji „Ek
 Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
 wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).
 
+### Najlepsze momenty (osobny film)
+Sekcja „Najlepsze momenty (osobny film)”:
+1. **Instrukcja dla ChatGPT:** ustaw liczbę momentów w wersji dłuższej i krótszej, długość momentu, rodzaj (śmieszne/ciekawe), transkrypcję (film 1/2/oba) i pobierz plik.
+   ChatGPT odpowiada JSON-em: `{"momenty":[{"od","do","tytul","krotszy"}]}`; wczytaj go (plik albo wklejony tekst).
+2. **Lista momentów:** możesz poprawić czasy i tytuły, dodać/usunąć momenty, oznaczyć „krótszy” i obejrzeć moment (▶).
+3. **Tytuły i animacje:** tytuł główny oraz tytuły momentów (plansza przed każdym, domyślnie 2 s). Czcionka z pliku `.ttf/.otf`, wielkość, kolor, obrys,
+   tło planszy (rozmyta klatka z momentu albo jednolity kolor) i animacja do wyboru z podglądem: wjazd z dołu + fade, pop, odsłanianie od lewej, odbicie.
+   Napisy są rysowane w programie i wklejane do skryptu jako PNG, więc czcionka nie jest potrzebna przy renderze.
+4. **Muzyka:** plik z folderu z filmami, zapętlany i przycinany, z wejściem/wyjściem. **Ducking:** gdy w montażu jest głośniejszy dźwięk, muzyka się ścisza,
+   gdy cicho (np. na tytułach) wraca do ustawionej głośności („czułość” = od jakiej głośności, „siła” = jak mocno, „powrót” = jak szybko).
+5. **Składanie:** opcjonalne intro i outro (pliki z sekcji „Eksport”, doklejane twardo), wersja dłuższa i/lub krótsza.
+   „⬇ Pobierz render_momenty.sh” renderuje `momenty_dluzszy.mp4` i `momenty_krotszy.mp4`; „⬇ test” renderuje tytuł i 2 pierwsze momenty.
+Momenty to wycinki gotowego głównego montażu: mają te same cięcia (słowa, auto-zmiana), grafiki, efekty przy cięciu i dźwięki. Momenty muszą mieścić się w zakresie „od–do” montażu.
+Skrypt wznawia się po błędzie i sprawdza pliki na starcie, tak jak główny render.
+
 ### Głośność intro/outro i wejście dźwięku intro pod zajawką
 W sekcji „Eksport”: **głośność muzyki intro i outro** (w %, 100 = bez zmian) oraz **„dźwięk intro wchodzi pod koniec zajawki”** (sekundy, 0 = twarde cięcie).
 Przy wartości > 0 dźwięk intro wjeżdża tyle sekund przed jego obrazem, a dźwięk zajawki się wycisza; obraz zmienia się twardo.
