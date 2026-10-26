@@ -110,6 +110,12 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 
 <section>
 <h2>3. Słowa i cięcia</h2>
+<div class="row" style="margin-bottom:6px"><b>Domyślny dźwięk cięcia</b>
+ <input type="file" id="dsf" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" style="max-width:230px"><span class="mut" id="dsn"></span>
+ <label>głośność %</label><input type="number" id="dsv" value="100" min="0" max="300" step="5" style="width:70px">
+ <label>przesunięcie s</label><input type="number" id="dso" value="0" step="0.05" style="width:70px" title="ujemne = dźwięk zaczyna się przed cięciem">
+ <label><input type="checkbox" id="dsa" checked> także przy cięciach automatycznych</label></div>
+<div class="mut" style="margin-bottom:10px">Gra przy każdym cięciu. Dźwięk ustawiony przy konkretnym słowie (niżej) ma pierwszeństwo tylko dla tego słowa; „bez dźwięku” wyłącza go dla słowa.</div>
 <div id="rules"></div>
 <div class="row" style="margin:6px 0 12px"><button id="addrule">+ dodaj słowo</button>
  <span class="mut">Każde słowo ma własną akcję: przełącz obraz na drugi film albo przejdź na konkretny film.</span></div>
@@ -408,12 +414,18 @@ function fmtHMS(t){
 const q=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 const n3=x=>(Math.round(x*1000)/1000).toFixed(3);
 // efekty dźwiękowe w miejscach cięć: tg = czas globalny (podgląd), to = czas w gotowym pliku (z intro)
-function sfxEvents(segs,rules,introDur=0){
-  const ev=[];if(!segs.length)return ev;const t0=segs[0].a;
+// dźwięk cięcia: własny dźwięk słowa ma pierwszeństwo, inaczej domyślny (def = {file,vol,off,auto}); r.mute wyłącza dla słowa
+function sfxEvents(segs,rules,introDur=0,def=null){
+  const ev=[];if(!segs.length)return ev;const t0=segs[0].a,pct=v=>(v==null||v==='')?1:(+v)/100;
   segs.forEach((s,i)=>{
-    if(i===0||s.rule==null)return;const r=rules[s.rule];if(!r||!r.sfx)return;
-    const off=+r.off||0,vol=(r.vol==null||r.vol==='')?1:(+r.vol)/100;
-    ev.push({rule:s.rule,file:r.sfx,vol,tg:s.a+off,to:Math.max(0,introDur+(s.a-t0)+off)});
+    if(i===0)return;
+    const r=s.rule!=null?rules[s.rule]:null;
+    if(r&&r.mute)return;
+    let file,vol,off,isDef=false;
+    if(r&&r.sfx){file=r.sfx;off=+r.off||0;vol=pct(r.vol)}
+    else if(def&&def.file&&(s.rule!=null||def.auto)){file=def.file;off=+def.off||0;vol=pct(def.vol);isDef=true}
+    else return;
+    ev.push({rule:s.rule==null?-1:s.rule,def:isDef,file,vol,tg:s.a+off,to:Math.max(0,introDur+(s.a-t0)+off)});
   });
   return ev;
 }
@@ -477,7 +489,7 @@ function planParts(segs,o){
     const tdur=teaser.reduce((a,s)=>a+s.b-s.a,0);
     const dur=ps.reduce((a,s)=>a+s.b-s.a,0),id=hasIntro?(o.intro.dur||0):0,od=hasOutro?(o.outro.dur||0):0;
     return {i,segs:ps,teaser,tdur,from:ps[0].a,to:ps[ps.length-1].b,dur,total:tdur+id+dur+od,hasIntro,hasOutro,
-      events:sfxEvents(teaser,o.rules||[],0).concat(sfxEvents(ps,o.rules||[],tdur+id)),
+      events:sfxEvents(teaser,o.rules||[],0,o.defSfx).concat(sfxEvents(ps,o.rules||[],tdur+id,o.defSfx)),
       out:parts.length===1?o.out:`${base}_cz${String(i+1).padStart(2,'0')}.mp4`};
   });
 }
@@ -487,7 +499,7 @@ function planTest(segs,o,k,limit=10){
   const ps=clipSegs(full.segs,full.segs[0].a,full.segs[0].a+limit),id=full.hasIntro?(o.intro.dur||0):0;
   const dur=ps.reduce((a,s)=>a+s.b-s.a,0);
   return [{...full,i:0,segs:ps,dur,hasOutro:false,total:full.tdur+id+dur,
-    events:sfxEvents(full.teaser,o.rules||[],0).concat(sfxEvents(ps,o.rules||[],full.tdur+id)),
+    events:sfxEvents(full.teaser,o.rules||[],0,o.defSfx).concat(sfxEvents(ps,o.rules||[],full.tdur+id,o.defSfx)),
     out:`test_cz${String(k+1).padStart(2,'0')}.mp4`}];
 }
 // rozjaśnienie po cięciu: jasność i nasycenie wracają do normy (ease-out); strength 0–100 %, dur w sekundach
@@ -739,7 +751,7 @@ function momentsLayout(o,moms){
   moms.forEach(m=>{
     const clip=clipSegs(o.segs,m.a,m.b),dur=clip.reduce((a,s)=>a+s.b-s.a,0);
     const hasCard=!!m.png;if(hasCard)t+=dMom;
-    events.push(...sfxEvents(clip,o.rules||[],t));
+    events.push(...sfxEvents(clip,o.rules||[],t,o.defSfx));
     items.push({m,clip,dur,card:hasCard});
     t+=dur;
   });
@@ -975,7 +987,7 @@ function seekTo(t){
   v1.currentTime=t;S.lastT=t;v2.currentTime=Math.max(0,t+offset());$('seek').value=t;$('tnow').textContent=fmt(t);
   const s=segAt(t);setActive(s?s.src:+$('start').value);moveHead(t);
 }
-function playSfx(e){const r=S.rules[e.rule];if(!r||!r.sfxUrl)return;const a=new Audio(r.sfxUrl);a.volume=Math.max(0,Math.min(1,e.vol));a.play().catch(()=>{})}
+function playSfx(e){const r=e.rule>=0?S.rules[e.rule]:null,url=e.def?S.defSfxUrl:(r&&r.sfxUrl);if(!url)return;const a=new Audio(url);a.volume=Math.max(0,Math.min(1,e.vol));a.play().catch(()=>{})}
 function stopPlay(){
   S.playing=false;S.stopAt=null;v1.pause();v2.pause();$('play').textContent='▶ Odtwórz';
   for(const id of['fxv','txv']){const v=$(id);v.pause();v.style.display='none'}
@@ -1024,7 +1036,7 @@ function recompute(){
   const hits=findAllHits(S.rules,S.w1,S.w2,o,num($('tol').value,4));S.hits=hits;
   const active=hits.filter(h=>!S.off.has(hitKey(h)));
   S.segs=outT>inT?buildSegments(active,{minShot:+$('minshot').value||0,startSrc:+$('start').value,inT,outT,autoSec:$('auto').checked?(+$('autosec').value||0):0}):[];
-  S.events=sfxEvents(S.segs,S.rules,0);S.cuts=S.segs.slice(1).map(s=>s.a);
+  S.events=sfxEvents(S.segs,S.rules,0,defSfxCfg());S.cuts=S.segs.slice(1).map(s=>s.a);
   renderHits(inT,outT);renderTL(inT,outT);renderExport();
   $('seek').min=inT;$('seek').max=outT;
   const used=S.segs.length?S.segs.length-1:0;
@@ -1042,16 +1054,18 @@ function renderRules(){
       <select class="ac"><option value="src">przejdź na film z tej transkrypcji</option><option value="toggle">przełącz na drugi film</option><option value="1">przejdź na film 1</option><option value="2">przejdź na film 2</option></select>
       <button class="rm" title="usuń">✕</button>
       <span style="flex-basis:100%;height:0"></span>
-      <label>dźwięk w cięciu</label><input type="file" class="sf" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" style="max-width:230px">
+      <label>własny dźwięk (puste = domyślny)</label><input type="file" class="sf" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" style="max-width:230px">
       <span class="mut sn"></span>
       <label>głośność %</label><input type="number" class="sv" min="0" max="300" step="5" style="width:70px">
-      <label>przesunięcie s</label><input type="number" class="so" step="0.05" style="width:70px" title="ujemne = dźwięk zaczyna się przed cięciem">`;
+      <label>przesunięcie s</label><input type="number" class="so" step="0.05" style="width:70px" title="ujemne = dźwięk zaczyna się przed cięciem">
+      <label><input type="checkbox" class="rmu"> bez dźwięku</label>`;
     const inp=d.querySelector('input'),qs=d.querySelector('.qs'),ac=d.querySelector('.ac');
     inp.value=r.q;qs.value=r.qsrc;ac.value=r.act;
     const sf=d.querySelector('.sf'),sn=d.querySelector('.sn'),sv=d.querySelector('.sv'),so=d.querySelector('.so');
     sv.value=r.vol??100;so.value=r.off??0;sn.textContent=r.sfx?('('+r.sfx+')'):'';
     sf.onchange=()=>{const f=sf.files[0];r.sfx=f?f.name:'';r.sfxUrl=f?URL.createObjectURL(f):null;sn.textContent=f?('('+f.name+')'):'';recompute()};
     sv.oninput=()=>{r.vol=+sv.value;recompute()};so.oninput=()=>{r.off=+so.value;recompute()};
+    const rmu=d.querySelector('.rmu');rmu.checked=!!r.mute;rmu.onchange=()=>{r.mute=rmu.checked;recompute()};
     inp.oninput=()=>{r.q=inp.value;recompute()};
     qs.onchange=()=>{r.qsrc=qs.value;recompute()};
     ac.onchange=()=>{r.act=ac.value;recompute()};
@@ -1083,7 +1097,7 @@ $('tl').onclick=e=>{
 };
 
 // eksport
-const opts=()=>({introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+const opts=()=>({defSfx:defSfxCfg(),introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
 function loadExtra(kind,file){
   if(!file){S[kind+'F']='';S[kind+'Dur']=0;$('i'+kind).textContent='';recompute();return}
   const v=document.createElement('video');v.preload='metadata';v.src=URL.createObjectURL(file);
@@ -1092,7 +1106,7 @@ function loadExtra(kind,file){
 }
 $('fintro').onchange=e=>loadExtra('intro',e.target.files[0]);
 $('foutro').onchange=e=>loadExtra('outro',e.target.files[0]);
-const planOpts=()=>{const o=opts();return{n:+$('nparts').value||1,snap:$('psnap').value==='1',all:$('pall').checked,intro:o.intro,outro:o.outro,out:o.out,rules:S.rules,
+const planOpts=()=>{const o=opts();return{n:+$('nparts').value||1,snap:$('psnap').value==='1',all:$('pall').checked,intro:o.intro,outro:o.outro,out:o.out,rules:S.rules,defSfx:o.defSfx,
   teasers:S.teasers.map(t=>({a:parseTime(t.a),b:parseTime(t.b)}))}};
 function renderTeaserRows(n){
   while(S.teasers.length<n)S.teasers.push({a:'',b:''});
@@ -1139,7 +1153,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off})),overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1149,6 +1163,7 @@ $('load').onchange=async e=>{
   if(p.mchk){$('mintro').checked=!!p.mchk.intro;$('moutro').checked=!!p.mchk.outro;$('mdl').checked=p.mchk.dl!==false;$('mds').checked=p.mchk.ds!==false}
   S.moms=(p.moms||[]).map(m=>({a:m.a||'',b:m.b||'',title:m.title||'',short:!!m.short}));renderMoms();
   if(p.mnames)S.musicName=p.mnames.musicName||'';
+  if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
   if(p.flash){$('flashon').checked=!!p.flash.on;$('flashs').value=p.flash.strength;$('flashd').value=p.flash.dur;effLabels()}
@@ -1157,7 +1172,7 @@ $('load').onchange=async e=>{
   if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
-  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,p.mnames&&p.mnames.musicName,p.mnames&&p.mnames.fontMain&&('czcionka: '+p.mnames.fontMain),p.mnames&&p.mnames.fontMom&&('czcionka: '+p.mnames.fontMom),...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
+  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,p.defsfx&&p.defsfx.name,p.mnames&&p.mnames.musicName,p.mnames&&p.mnames.fontMain&&('czcionka: '+p.mnames.fontMain),p.mnames&&p.mnames.fontMom&&('czcionka: '+p.mnames.fontMom),...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
 };
 function stageRatio(){const w=+$('W').value||1920,hh=+$('H').value||1080;$('stage').style.aspectRatio=S.mode==='mon'?(w+'/'+hh):''}
 ['W','H'].forEach(id=>$(id).addEventListener('input',stageRatio));
@@ -1233,6 +1248,10 @@ function loadGptText(txt){try{applyTeaserList(parseTeaserJson(txt))}catch(e){$('
 $('gptin').onchange=async e=>{const f=e.target.files[0];if(f)loadGptText(await f.text())};
 $('gptload').onclick=()=>loadGptText($('gptpaste').value);
 // ====== najlepsze momenty (UI) ======
+S.defSfxName='';S.defSfxUrl=null;
+function defSfxCfg(){return S.defSfxName?{file:S.defSfxName,vol:num($('dsv').value,100),off:num($('dso').value,0),auto:$('dsa').checked}:null}
+$('dsf').onchange=e=>{const f=e.target.files[0];S.defSfxName=f?f.name:'';S.defSfxUrl=f?URL.createObjectURL(f):null;$('dsn').textContent=f?' '+f.name:'';recompute()};
+for(const id of['dsv','dso'])$(id).oninput=recompute;$('dsa').onchange=recompute;
 S.moms=[];S.fonts={main:null,mom:null};
 for(const id of['manimmain','manimmom'])$(id).innerHTML=Object.entries(ANIMS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
 $('manimmom').value='pop';

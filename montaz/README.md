@@ -53,6 +53,11 @@ Podgląd ma proporcje rozmiaru wyjściowego (pola rozdzielczości w sekcji „Ek
 Pola „od" i „do" w sekcji 3 przyjmują czas w formacie `1:12:05`, `72:05` albo zwykłe sekundy (`4325`). Przyciski „ustaw na bieżący"
 wpisują w nie aktualny czas filmu 1 (np. ustaw film w odpowiednim miejscu, kliknij przycisk).
 
+### Dźwięk cięcia: domyślny i własny dla słowa
+Nad listą słów jest **„Domyślny dźwięk cięcia”** (plik, głośność %, przesunięcie w sekundach, opcja „także przy cięciach automatycznych”). Gra przy każdym cięciu.
+Jeśli przy słowie wskażesz własny dźwięk, ma on pierwszeństwo tylko dla tego słowa; pole **„bez dźwięku”** wyłącza dźwięk dla słowa. Dotyczy też zajawek i filmu z momentów.
+Plik dźwięku musi leżeć w folderze z filmami.
+
 ### Najlepsze momenty (osobny film)
 Sekcja „Najlepsze momenty (osobny film)”:
 1. **Instrukcja dla ChatGPT:** ustaw liczbę momentów w wersji dłuższej i krótszej, długość momentu, rodzaj (śmieszne/ciekawe), transkrypcję (film 1/2/oba) i pobierz plik.
