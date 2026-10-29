@@ -245,6 +245,63 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row"><button id="mdlsh" class="pri">⬇ Pobierz render_momenty.sh</button><button id="mdltest">⬇ test: tytuł + 2 pierwsze momenty</button><span class="mut" id="mdlinfo"></span></div>
 </section>
 
+<section id="weeksec">
+<h2>„W tym tygodniu” (skrót z lektorem)</h2>
+<div class="mut" style="margin-bottom:10px">Krótki film-podsumowanie z narracją lektora. ChatGPT wybiera sceny z transkrypcji (zakres „od–do” montażu) i pisze do nich tekst. Tekst czytasz syntezatorem (np. ElevenLabs), wczytujesz nagranie tutaj, a program sam dopasowuje długość każdej sceny do długości jej akapitu (po przerwach między akapitami). Cięcia kamer, grafiki, efekt i dźwięk cięcia są takie same jak w głównym montażu.</div>
+
+<b>1. Instrukcja dla ChatGPT</b>
+<div class="row" style="margin:8px 0">
+ <label>długość skrótu (min)</label><input type="number" id="wmin" value="4" min="1" step="0.5" style="width:60px">
+ <label>scena od</label><input type="number" id="wcmin" value="8" min="3" style="width:55px"><label>do</label><input type="number" id="wcmax" value="25" min="3" style="width:55px"><label>s</label>
+ <label>transkrypcja</label><select id="wsrcsel"><option value="1">film 1</option><option value="2">film 2</option><option value="3">oba (z oznaczeniem)</option></select>
+</div>
+<div class="row" style="margin-bottom:8px"><label>kontekst (opcjonalnie)</label><input type="text" id="wctx" placeholder="np. gra Fortnite, dwóch graczy, polski komentarz" style="width:min(520px,100%)"></div>
+<div class="row" style="margin-bottom:8px"><label>wstęp (opcjonalnie) – polecenie dla ChatGPT</label></div>
+<div class="row" style="margin-bottom:8px"><textarea id="wgreet" placeholder="np. Przywitaj widzów po imieniu, krótko i z humorem zapowiedz, co działo się w tym tygodniu. Zostaw puste, jeśli lektor ma od razu opowiadać o scenach." style="height:62px"></textarea></div>
+<div class="mut" style="margin-bottom:8px">Gdy wstęp jest wpisany, ChatGPT dołoży powitanie i wybierze najciekawszą scenę, która będzie widoczna pod powitaniem (nie powtórzy jej potem w skrócie). Gdy puste: tylko sceny z transkrypcji, bez powitania.</div>
+<div class="row" style="margin-bottom:8px"><button id="wgen" class="pri">⬇ Pobierz instrukcję dla ChatGPT (tydzień)</button><span class="mut" id="wgeninfo"></span></div>
+<div class="row"><label>odpowiedź ChatGPT (plik .json/.txt)</label><input type="file" id="win"></div>
+<div class="row" style="margin-top:6px"><textarea id="wpaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON)" style="height:70px"></textarea></div>
+<div class="row" style="margin:6px 0 12px"><button id="wload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="wmsg"></span></div>
+
+<b>2. Sceny i tekst lektora</b> <span class="mut">(możesz poprawiać czasy i tekst; pierwszy wiersz to wstęp, jeśli jest)</span>
+<div class="hitbox" style="max-height:380px;margin:6px 0"><table id="wtab"></table></div>
+<div class="row" style="margin-bottom:8px"><button id="waddm">+ dodaj scenę</button><span class="mut" id="wtinfo"></span></div>
+<div class="row" style="margin-bottom:12px">
+ <button id="wtxt" class="pri">⬇ Pobierz tekst dla lektora (ElevenLabs)</button>
+ <label><input type="checkbox" id="wbrk" checked> znaczniki przerwy &lt;break time="1.0s" /&gt; między akapitami</label>
+ <label>maks. znaków w pliku</label><input type="number" id="wmaxc" value="4500" min="500" step="500" style="width:75px">
+ <span class="mut" id="wtxtinfo"></span>
+</div>
+
+<b>3. Nagranie lektora</b>
+<div class="row" style="margin:8px 0"><label>pliki audio lektora (jeden lub kilka, w kolejności)</label><input type="file" id="wnar" accept="audio/*,.mp3,.wav,.m4a" multiple><span class="mut" id="wnari"></span></div>
+<div class="mut" style="margin-bottom:8px">Po wczytaniu program wykrywa przerwy między akapitami i ustawia czas każdej sceny (kolumna „lektor”, można poprawić ręcznie). Jeśli wczytasz tyle plików, ile ich pobrałeś w kroku 2, akapity są przypisane do plików; w innym razie plik jest dzielony po najdłuższych przerwach. Jeśli nagranie jest dłuższe niż zaplanowane sceny, ostatnia scena się przedłuża; jeśli krótsze, kończy się razem z lektorem.</div>
+
+<b>4. Dźwięk, muzyka i intro</b>
+<div class="row" style="margin:8px 0">
+ <label>głośność lektora %</label><input type="number" id="wnvol" value="100" min="0" max="300" step="5" style="width:65px">
+ <label>dźwięk filmu pod lektorem %</label><input type="number" id="wfvol" value="25" min="0" max="300" step="5" style="width:65px">
+ <label>lektor wchodzi po (s)</label><input type="number" id="wdelay" value="1.5" min="0" step="0.5" style="width:60px">
+ <label>po lektorze jeszcze (s)</label><input type="number" id="wtail" value="1" min="0" step="0.5" style="width:60px">
+</div>
+<div class="row" style="margin-bottom:8px"><label>plik muzyki (opcjonalnie)</label><input type="file" id="wmus" accept="audio/*,.mp3,.wav,.m4a"><span class="mut" id="wmusi"></span></div>
+<div class="row" style="margin-bottom:8px">
+ <label>głośność muzyki %</label><input type="number" id="wmvol" value="45" min="0" max="300" step="5" style="width:65px">
+ <label>siła przyciszania</label><input type="range" id="wduck" min="0" max="100" value="80" style="width:110px"><span class="mono" id="wduckv">80</span>
+ <label>czułość</label><input type="range" id="wthr" min="0" max="100" value="50" style="width:110px"><span class="mono" id="wthrv">50</span>
+ <label>powrót (ms)</label><input type="number" id="wrel" value="600" min="50" step="50" style="width:70px">
+ <label>wejście/wyjście (s)</label><input type="number" id="wfin" value="1.5" min="0" step="0.5" style="width:55px"><input type="number" id="wfout" value="2" min="0" step="0.5" style="width:55px">
+</div>
+<div class="mut" style="margin-bottom:8px">Dźwięk z filmu (rozmowa z gry) jest ściszony do ustawionej wartości (0 = całkiem wyciszony) i dodatkowo przyciszany, gdy mówi lektor. Muzyka też ustępuje lektorowi.</div>
+<div class="row" style="margin-bottom:12px"><label>intro „W tym tygodniu” – film z alfą (.mov/.webm)</label><input type="file" id="wintro" accept="video/*,.mov,.webm"><span class="mut" id="wintroi"></span></div>
+<div class="mut" style="margin-bottom:12px">Intro jest nakładką na początek skrótu (gra raz, nie wydłuża filmu). Jego długość program odczytuje z pliku; jeśli się nie uda, przyjmie 8 s.</div>
+
+<b>5. Render</b>
+<div class="row" style="margin:8px 0"><label>nazwa pliku</label><input type="text" id="wout" value="w_tym_tygodniu" style="width:170px"></div>
+<div class="row"><button id="wdlsh" class="pri">⬇ Pobierz render_tydzien.sh</button><button id="wdltest">⬇ test: pierwsze 25 s</button><span class="mut" id="wdlinfo"></span></div>
+</section>
+
 <section>
 <h2>4. Eksport</h2>
 <div class="row" style="margin-bottom:8px">
@@ -744,7 +801,7 @@ function buildGptPrompt(plan,{lines1=[],lines2=[],offset=0,src='1',min=15,max=30
    'Format linii: [g:mm:ss] tekst'+(both?' (F1 / F2 = źródło: film 1 lub film 2, obie rozmowy są z tego samego czasu)':'')+'. Czasy to ta sama oś czasu co w tabeli części i w odpowiedzi.','');
   plan.forEach(p=>{
     L.push(`### CZĘŚĆ ${p.i+1} (${hms(p.from)} – ${hms(p.to)})`,'');
-    lines.filter(l=>l.t>=p.from&&l.t<p.to).forEach(l=>L.push(`[${hms(l.t)}] ${both?l.tag+': ':''}${l.text}`));
+    lines.filter(l=>l.t>=p.from&&l.t<p.to).forEach(l=>L.push(`[${fmtHMS(l.t)}] ${both?l.tag+': ':''}${l.text}`));
     L.push('');
   });
   return L.join('\n');
@@ -786,12 +843,13 @@ function ffAnim(preset,D,W,H,fps=25){
   return{chain:`format=rgba,${fin},${fout}`,x:cx,y:`${cy}+${n3(0.055*H)}*pow(max(0,1-t/0.6),2)`};
 }
 // komenda kodowania jednego ujęcia (do momentów); zwraca {cmd,need}
-function segCommand(o,vf,venc,s,tmpOut,cut){
+function segCommand(o,vf,venc,s,tmpOut,cut,tx){
   const ss=Math.max(0,s.src===1?s.a:s.a+o.offset),dur=s.b-s.a,f=s.src===1?o.f1:o.f2;
   const af=`aresample=48000,aformat=channel_layouts=stereo,afade=t=in:d=0.01,afade=t=out:st=${n3(Math.max(0,dur-0.01))}:d=0.01`;
-  const sv=segVideo(o,vf,s,{cut}),inA=`-ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)}`;
+  const sv=segVideo(o,vf,s,{cut,textFile:tx&&tx.file?tx.file:'',textOffset:tx&&tx.file?tx.offset:0}),inA=`-ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)}`;
   const need=[f,...(o.overlays||[]).filter(v=>v.name&&(v.film==='both'||+v.film===s.src)).map(v=>v.name)];
   if(cut&&o.fx&&o.fx.name)need.push(o.fx.name);
+  if(tx&&tx.file)need.push(tx.file);
   const cmd=sv.graph
     ?`ffmpeg -y -loglevel error ${inA} ${sv.inputs.join(' ')} -filter_complex "${sv.graph}" -map "[vo]" -map 0:a -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`
     :`ffmpeg -y -loglevel error ${inA} -vf "${sv.vf}" -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`;
@@ -952,7 +1010,7 @@ function buildMomentsPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9
    '    { "od": "0:25:40", "do": "0:26:05", "tytul": "Atak tańczącego snajpera", "krotszy": false }','  ]','}','```','',
    '## Transkrypcja','',
    'Format linii: [g:mm:ss] tekst'+(both?' (F1 / F2 = źródło: film 1 lub film 2, obie rozmowy są z tego samego czasu)':'')+'. Czasy dotyczą osi czasu montażu (taka sama jak w odpowiedzi).','');
-  lines.filter(l=>l.t>=inT&&l.t<outT).forEach(l=>L.push(`[${hms(l.t)}] ${both?l.tag+': ':''}${l.text}`));
+  lines.filter(l=>l.t>=inT&&l.t<outT).forEach(l=>L.push(`[${fmtHMS(l.t)}] ${both?l.tag+': ':''}${l.text}`));
   return L.join('\n');
 }
 function parseMomentsJson(text){
@@ -964,6 +1022,152 @@ function parseMomentsJson(text){
     short:!!(x.krotszy??x['krótszy']??x.short??x.shorter)})).filter(x=>x.a&&x.b);
   if(!out.length)throw new Error('JSON nie zawiera momentów (od/do/tytul)');
   return out;
+}
+// ============ „W tym tygodniu”: skrót głównego materiału z lektorem ============
+// wycinek [a, a+D] montażu o dokładnie takiej długości (przedłużony/obcięty od początku sceny)
+function fitClip(segs,a,D,startSrc=1){
+  let ps=clipSegs(segs,a,a+D);
+  if(!ps.length)ps=[{src:startSrc,a,b:a+D,rule:null}];
+  const tot=ps.reduce((x,s)=>x+s.b-s.a,0);
+  if(tot<D-0.04)ps[ps.length-1]={...ps[ps.length-1],b:ps[ps.length-1].b+(D-tot)};
+  return ps;
+}
+// akapity narracji: wstęp (opcjonalny) + momenty; durs[i] = długość mowy akapitu i
+function weekClips(o){
+  const paras=[];if(o.greet)paras.push({kind:'g',...o.greet});o.items.forEach(m=>paras.push({kind:'m',...m}));
+  return paras.map((p,i)=>{
+    let D=Math.max(0.5,+o.durs[i]||0);if(i===0)D+=(+o.delay||0);if(i===paras.length-1)D+=(+o.tail||0);
+    return{...p,D,segs:fitClip(o.segs,p.a,D,o.startSrc||1)};
+  });
+}
+// pliki tekstowe dla lektora (ElevenLabs): akapity rozdzielone przerwą, pakowane do limitu znaków na plik
+function buildNarrationFiles(texts,{maxChars=4500,breaks=true}={}){
+  const sep=breaks?'\n<break time="1.0s" />\n':'\n\n',files=[];let cur=[];
+  const len=a=>a.join(sep).length;
+  for(const t of texts){
+    if(cur.length&&len([...cur,t])>maxChars){files.push(cur);cur=[]}
+    cur.push(t);
+  }
+  if(cur.length)files.push(cur);
+  return files.map(a=>({text:a.join(sep)+'\n',count:a.length}));
+}
+// przerwy w nagraniu lektora -> długości k akapitów. env = RMS co hop s. Zwraca {durs,exact,gaps}
+function splitDurations(env,hop,dur,k,weights){
+  if(k<=1)return{durs:[dur],exact:true,gaps:[]};
+  const sorted=[...env].sort((a,b)=>a-b),peak=sorted[Math.floor(sorted.length*0.95)]||0,thr=Math.max(0.004,peak*0.06);
+  const runs=[];let st=-1;
+  for(let i=0;i<=env.length;i++){
+    const silent=i<env.length&&env[i]<thr;
+    if(silent&&st<0)st=i;
+    if(!silent&&st>=0){if(st>0&&i<env.length&&(i-st)*hop>=0.3)runs.push({a:st*hop,b:i*hop,len:(i-st)*hop});st=-1}
+  }
+  if(runs.length>=k-1){
+    const top=runs.sort((x,y)=>y.len-x.len).slice(0,k-1).sort((x,y)=>x.a-y.a),cuts=top.map(r=>(r.a+r.b)/2),durs=[];
+    let prev=0;for(const c of cuts){durs.push(c-prev);prev=c}durs.push(dur-prev);
+    return{durs,exact:true,gaps:top.map(r=>+r.len.toFixed(2))};
+  }
+  // za mało przerw: dzielimy proporcjonalnie do liczby słów
+  const w=(weights&&weights.length===k)?weights:Array(k).fill(1),sum=w.reduce((a,b)=>a+b,0);
+  return{durs:w.map(x=>dur*x/sum),exact:false,gaps:runs.map(r=>+r.len.toFixed(2))};
+}
+// instrukcja dla ChatGPT: skrót materiału + narracja
+function buildWeekPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,targetMin=4,cmin=8,cmax=25,ctx='',greetPrompt=''}){
+  const both=src==='3',lines=[];
+  if(src!=='2')lines1.forEach(l=>lines.push({t:l.t0,text:l.text,tag:'F1'}));
+  if(src!=='1')lines2.forEach(l=>lines.push({t:l.t0-offset,text:l.text,tag:'F2'}));
+  lines.sort((a,b)=>a.t-b.t);
+  const words=Math.round(targetMin*140),gp=String(greetPrompt||'').trim();
+  const L=['# Zadanie: skrót tygodnia z narracją lektora','',
+   'Jesteś montażystą i scenarzystą filmów na YouTube. Poniżej jest transkrypcja materiału z gry (rozmowa dwóch osób). Przygotuj SKRÓT tego materiału w formie filmu „W tym tygodniu”: wybierz najważniejsze/najciekawsze momenty i napisz do nich narrację lektora (czytaną później syntezatorem mowy), tak aby słowa lektora pokrywały się z obrazem scen, o których mówi.',''];
+  if(ctx.trim())L.push('Kontekst: '+ctx.trim(),'');
+  L.push('## Zasady',
+   `- Docelowa długość skrótu: ok. ${targetMin} min, czyli narracja ok. ${words} słów (lektor mówi ok. 140 słów na minutę).`,
+   '- Wybierz momenty w kolejności chronologicznej. Do KAŻDEGO momentu napisz jeden akapit narracji (pole "tekst").',
+   `- Każdy moment to jeden ciągły zakres czasu o długości od ${cmin} do ${cmax} sekund. Akapit ma opisywać dokładnie tę scenę; jego długość (przy ok. 2,3 słowa na sekundę) powinna być zbliżona do długości sceny.`,
+   '- Narracja ma być po polsku, żywa i zwięzła, w stylu podsumowania tygodnia. Opieraj się wyłącznie na tym, co wynika z transkrypcji; niczego nie zmyślaj.',
+   '- Pisz tekst do czytania na głos: pełne zdania, bez emoji, bez nawiasów, bez didaskaliów, liczby słownie, bez cudzysłowów wokół tytułów.',
+   '- Początek i koniec sceny dopasuj do granic zdań/linii, żeby scena była zrozumiała sama w sobie. Czasy w transkrypcji są przybliżone (±1–2 s), więc zostaw margines.',
+   '- Momenty nie mogą się nakładać.');
+  if(gp)L.push('',
+   '## Wstęp (powitanie)',
+   'Narracja zaczyna się od krótkiego wstępu/powitania napisanego według mojego polecenia:','',
+   '> '+gp,'',
+   'Do wstępu wybierz też NAJCIEKAWSZY moment z materiału (zakres od–do, 10–25 s), który będzie widoczny pod wstępem. Ten moment NIE powinien powtarzać się potem wśród momentów skrótu. Podaj go w polu "wstep".');
+  L.push('','## Format odpowiedzi',
+   'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), dokładnie w tej strukturze. Czasy jako tekst „g:mm:ss” (np. "1:12:05"), możesz dodać ułamek sekundy:','',
+   '```json','{');
+  if(gp)L.push('  "wstep": { "od": "0:41:10", "do": "0:41:32", "tekst": "Cześć! Witajcie w podsumowaniu tygodnia…" },');
+  L.push('  "momenty": [',
+   '    { "od": "0:11:03", "do": "0:11:26", "tekst": "Na początku tygodnia…" },',
+   '    { "od": "0:25:40", "do": "0:26:02", "tekst": "Chwilę później…" }','  ]','}','```','',
+   '## Transkrypcja','',
+   'Format linii: [g:mm:ss] tekst'+(both?' (F1 / F2 = źródło: film 1 lub film 2, obie rozmowy są z tego samego czasu)':'')+'. Czasy dotyczą osi czasu montażu (taka sama jak w odpowiedzi).','');
+  lines.filter(l=>l.t>=inT&&l.t<outT).forEach(l=>L.push(`[${fmtHMS(l.t)}] ${both?l.tag+': ':''}${l.text}`));
+  return L.join('\n');
+}
+function parseWeekJson(text){
+  const m=String(text).match(/\{[\s\S]*\}/);if(!m)throw new Error('nie znalazłem JSON-a');
+  const j=JSON.parse(m[0]);
+  const tm=v=>v==null?'':(typeof v==='number'?fmtHMS(v):String(v).trim());
+  const one=x=>({a:tm(x.od??x.from??x.start),b:tm(x['do']??x.to??x.end),text:String(x.tekst??x.text??x.narracja??'').trim()});
+  const items=(j.momenty||j.moments||j.sceny||[]).map(one).filter(x=>x.a&&x.b&&x.text);
+  if(!items.length)throw new Error('JSON nie zawiera momentów (od/do/tekst)');
+  const g=j.wstep||j['wstęp']||j.greeting||j.intro,greet=g?one(g):null;
+  return{greet:greet&&greet.a&&greet.b&&greet.text?greet:null,items};
+}
+// układ i skrypt renderu skrótu
+function genWeekScript(o){
+  const T=o.tmp||'_segweek',W=o.W,H=o.H,fps=o.fps;
+  const vf=`scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`;
+  const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
+  const clips=weekClips(o),total=clips.reduce((a,c)=>a+c.D,0),vol=pctVol;
+  const flat=[];let t=0;
+  clips.forEach((c,ci)=>c.segs.forEach((s,j)=>{flat.push({...s,start:t,cut:!(ci===0&&j===0),first:j===0});t+=s.b-s.a}));
+  const limit=+o.limit>0?+o.limit:0,use=limit?flat.filter(s=>s.start<limit):flat,tot=limit?Math.min(limit,total):total;
+  const need=new Set(),blocks=[],sig=[],names=[];
+  const guard=(file,cmd)=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,'  '+cmd,`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(cmd)};
+  const io=o.introOv&&o.introOv.name?o.introOv:null,iolen=io?(+io.len||8):0;
+  use.forEach((s,i)=>{
+    const name=`w${String(i).padStart(4,'0')}.mkv`,tx=io&&s.start<iolen?{file:io.name,offset:s.start}:null;
+    const sc=segCommand(o,vf,venc,s,`${T}/${name}.tmp.mkv`,s.cut,tx);
+    sc.need.forEach(f=>need.add(f));guard(name,sc.cmd);names.push(name);
+  });
+  const events=sfxEvents(use,o.rules||[],0,o.defSfx);
+  const nar=o.narr||[],mu=o.music&&o.music.name?o.music:null;
+  nar.forEach(n=>need.add(n.name));if(mu)need.add(mu.name);
+  const mixIn=[`-i ${q(T+'_all.mkv')}`],g=[`[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB[b0]`];
+  let film='[b0]';
+  const nIdx=mixIn.length;nar.forEach(n=>mixIn.push('-i '+q(n.name)));
+  if(events.length){const sf=sfxFilter(events,'[b0]',mixIn.length);sf.files.forEach(f=>{need.add(f);mixIn.push('-i '+q(f))});g.push(sf.graph.replace(/\[a\]$/,'[film0]'));film='[film0]'}
+  const fmt='aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo',dly=Math.round((+o.delay||0)*1000);
+  const narIn=nar.map((n,i)=>`[${nIdx+i}:a]${fmt}[nn${i}]`);g.push(...narIn);
+  g.push(`${nar.map((n,i)=>`[nn${i}]`).join('')}concat=n=${nar.length}:v=0:a=1,volume=${vol(o.narVol)},adelay=${dly}:all=1,apad=whole_dur=${n3(tot)},asetpts=N/SR/TB[nar]`);
+  const thr=n3(Math.max(0.001,Math.min(1,0.2*Math.pow(0.05,(+o.duck.thr||0)/100)))),ratio=n3(1+19*Math.max(0,Math.min(100,+o.duck.strength||0))/100);
+  const sc=`threshold=${thr}:ratio=${ratio}:attack=${Math.round(+o.duck.attack||40)}:release=${Math.round(+o.duck.release||600)}:makeup=1`;
+  if(mu){
+    const mi=mixIn.length;mixIn.push(`-stream_loop -1 -i ${q(mu.name)}`);
+    const fi=Math.min(+mu.fadeIn||0,tot/2),fo=Math.min(+mu.fadeOut||0,tot/2);
+    g.push(`[nar]asplit=3[n1][n2][n3]`,
+      `${film}volume=${vol(o.filmVol)}[f1]`,`[f1][n1]sidechaincompress=${sc}[fd]`,
+      `[${mi}:a]${fmt},atrim=0:${n3(tot)},asetpts=N/SR/TB,volume=${vol(mu.vol)},afade=t=in:st=0:d=${n3(fi)},afade=t=out:st=${n3(Math.max(0,tot-fo))}:d=${n3(fo)},apad=whole_dur=${n3(tot)}[mus]`,
+      `[mus][n2]sidechaincompress=${sc}[md]`,
+      `[n3][fd][md]amix=inputs=3:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
+  }else{
+    g.push(`[nar]asplit=2[n1][n3]`,`${film}volume=${vol(o.filmVol)}[f1]`,`[f1][n1]sidechaincompress=${sc}[fd]`,`[n3][fd]amix=inputs=2:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
+  }
+  const out=o.out||'w_tym_tygodniu.mp4',tflag=limit?` -t ${n3(tot)}`:'';
+  const mixCmd=`ffmpeg -y -loglevel error ${mixIn.join(' ')} -filter_complex "${g.join(';')}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k${tflag} ${q(out)}`;
+  const sigAll=hash32(vf+venc+sig.join('\n'));
+  const L=['#!/bin/bash','set -e','# 1) kontrola plików','missing=0',
+    `for f in ${[...need].map(q).join(' ')}; do`,'  if [ ! -f "$f" ]; then echo "BRAK PLIKU: $f"; missing=1; fi','done',
+    'if [ $missing -ne 0 ]; then echo "Uzupełnij brakujące pliki w tym folderze i uruchom skrypt ponownie."; exit 1; fi',
+    '# 2) wznawianie',`SIG="${sigAll}"`,
+    `if [ "$(cat ${T}/.sig 2>/dev/null)" != "$SIG" ]; then rm -rf ${T}; mkdir -p ${T}; echo "$SIG" > ${T}/.sig; fi`,
+    `rm -f ${T}_all.mkv ${T}/*.tmp.mkv`,...blocks,
+    `printf "file '%s'\\n" ${names.join(' ')} > ${T}/list.txt`,
+    `ffmpeg -y -loglevel error -f concat -safe 0 -i ${T}/list.txt -c copy ${T}_all.mkv`,
+    mixCmd,`rm -f ${T}_all.mkv`,`rm -rf ${T}`,`echo "Gotowe: ${out.replace(/["$`\\]/g,'')}"`];
+  return{script:L.join('\n'),clips,total,flatCount:flat.length};
 }
 function genEDL(segs,o){
   const fr=Math.round(o.fps);const tc=t=>{let f=Math.round(t*fr);const F=f%fr;f=(f-F)/fr;return [Math.floor(f/3600),Math.floor(f/60)%60,f%60,F].map(x=>String(x).padStart(2,'0')).join(':')};
@@ -1214,7 +1418,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},wk:{week:S.week,mus:S.wmus,intro:S.wintro,set:Object.fromEntries(['wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1226,6 +1430,7 @@ $('load').onchange=async e=>{
   if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
+  if(p.wk){S.week=p.wk.week||{greet:null,items:[]};S.wmus=p.wk.mus||'';S.wintro=p.wk.intro||'';S.wdurs=[];S.wfiles=[];for(const [k,v] of Object.entries(p.wk.set||{})){if($(k)){if($(k).type==='checkbox')$(k).checked=!!v;else $(k).value=v}}for(const id of['wduck','wthr'])$(id+'v').textContent=$(id).value;renderWeek()}
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
   if(p.flash){$('flashon').checked=!!p.flash.on;$('flashs').value=p.flash.strength;$('flashd').value=p.flash.dur;effLabels()}
@@ -1472,6 +1677,127 @@ $('txf').onchange=e=>fxFile('tx',e.target.files[0]);
 function effLabels(){$('flashsv').textContent=$('flashs').value+'%';$('flashdv').textContent=(+$('flashd').value).toFixed(2)+' s'}
 ['flashon','flashs','flashd'].forEach(id=>$(id).addEventListener('input',()=>{effLabels();recompute()}));
 $('flashon').addEventListener('change',recompute);
+
+// ============ „W tym tygodniu” ============
+S.week={greet:null,items:[]};S.wdurs=[];S.wfiles=[];S.wmus='';S.wintro='';S.wintroLen=0;S.wnarName=[];
+const wParas=()=>{const a=[];if(S.week.greet)a.push({kind:'g',...S.week.greet});S.week.items.forEach(m=>a.push({kind:'m',...m}));return a};
+const wWords=t=>Math.max(1,(String(t).replace(/<[^>]*>/g,' ').match(/\S+/g)||[]).length);
+function wGuess(){ // przybliżone długości z liczby słów (ok. 2,3 słowa/s), gdy nie ma nagrania
+  return wParas().map(p=>wWords(p.text)/2.3);
+}
+function wDurs(){const g=wGuess();return g.map((x,i)=>(S.wdurs[i]!=null&&S.wdurs[i]>0)?S.wdurs[i]:x)}
+function renderWeek(){
+  const tb=$('wtab');tb.innerHTML='<tr><th>#</th><th>od</th><th>do</th><th>lektor (s)</th><th>tekst lektora</th><th></th><th></th></tr>';
+  const paras=[];if(S.week.greet)paras.push({g:true,m:S.week.greet});S.week.items.forEach((m,i)=>paras.push({g:false,m,i}));
+  const durs=wDurs();
+  paras.forEach((pp,k)=>{
+    const m=pp.m,tr=document.createElement('tr');
+    tr.innerHTML=`<td>${pp.g?'wstęp':pp.i+1}</td><td><input type="text" class="wa" style="width:88px"></td><td><input type="text" class="wb" style="width:88px"></td>
+      <td><input type="number" class="wd" step="0.1" min="0" style="width:70px"></td><td><textarea class="wt" style="width:min(420px,45vw);height:54px"></textarea></td><td><button class="wp">▶</button></td><td>${pp.g?'':'<button class="wx">✕</button>'}</td>`;
+    const wa=tr.querySelector('.wa'),wb=tr.querySelector('.wb'),wd=tr.querySelector('.wd'),wt=tr.querySelector('.wt');
+    wa.value=m.a;wb.value=m.b;wt.value=m.text;wd.value=(durs[k]||0).toFixed(1);
+    wa.oninput=()=>{m.a=wa.value};wb.oninput=()=>{m.b=wb.value};
+    wt.oninput=()=>{m.text=wt.value;if(!S.wfiles.length)updateWeekInfo()};
+    wd.oninput=()=>{S.wdurs[k]=+wd.value;updateWeekInfo()};
+    tr.querySelector('.wp').onclick=()=>previewRange(parseTime(m.a),Math.min(parseTime(m.b),parseTime(m.a)+30),false);
+    const x=tr.querySelector('.wx');if(x)x.onclick=()=>{S.week.items.splice(pp.i,1);S.wdurs=[];renderWeek()};
+    tb.appendChild(tr);
+  });
+  updateWeekInfo();
+}
+function weekTotal(){const d=wDurs();return d.reduce((a,b)=>a+b,0)+num($('wdelay').value,1.5)+num($('wtail').value,1)}
+function updateWeekInfo(){
+  const el=$('wtinfo');if(!el)return;
+  const n=wParas().length;
+  el.textContent=n?` ${n} akapitów · film ok. ${fmt(weekTotal())}`+(S.wfiles.length?'':' (szacunek z liczby słów; po wczytaniu lektora będzie dokładnie)'):' brak scen';
+}
+function loadWeekText(txt){
+  try{
+    const r=parseWeekJson(txt);
+    r.items.sort((x,y)=>parseTime(x.a)-parseTime(y.a));
+    S.week={greet:r.greet,items:r.items};S.wdurs=[];renderWeek();
+    $('wmsg').textContent=` Wczytano scen: ${r.items.length}`+(r.greet?' + wstęp.':'.');
+  }catch(e){$('wmsg').textContent=' Nie udało się wczytać: '+e.message}
+}
+$('win').onchange=async e=>{const f=e.target.files[0];if(f)loadWeekText(await f.text())};
+$('wload').onclick=()=>loadWeekText($('wpaste').value);
+$('waddm').onclick=()=>{S.week.items.push({a:'',b:'',text:''});S.wdurs=[];renderWeek()};
+$('wgen').onclick=()=>{
+  if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
+  const src=$('wsrcsel').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
+  if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
+  const txt=buildWeekPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),targetMin:num($('wmin').value,4),cmin:num($('wcmin').value,8),cmax:num($('wcmax').value,25),ctx:$('wctx').value,greetPrompt:$('wgreet').value});
+  dl('instrukcja_chatgpt_tydzien.txt',txt);
+  $('wgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
+};
+function weekNarFiles(){return buildNarrationFiles(wParas().map(p=>p.text.trim()).filter(Boolean),{maxChars:num($('wmaxc').value,4500),breaks:$('wbrk').checked})}
+$('wtxt').onclick=()=>{
+  if(!wParas().length){alert('Najpierw wczytaj sceny od ChatGPT.');return}
+  const fs=weekNarFiles(),base='lektor_tydzien';
+  fs.forEach((f,i)=>dl(fs.length>1?`${base}_${String(i+1).padStart(2,'0')}.txt`:`${base}.txt`,f.text));
+  $('wtxtinfo').textContent=` ${fs.length} ${fs.length===1?'plik':'plików'} (akapity w plikach: ${fs.map(f=>f.count).join(', ')})`;
+};
+// nagranie lektora: dekodowanie, obwiednia głośności, przerwy
+async function envOf(file){
+  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();
+  try{
+    const buf=await ac.decodeAudioData(await file.arrayBuffer()),hop=0.05,n=Math.max(1,Math.round(buf.sampleRate*hop)),ch=buf.numberOfChannels,env=[];
+    const d=[];for(let c=0;c<ch;c++)d.push(buf.getChannelData(c));
+    for(let i=0;i+n<=buf.length;i+=n){let s=0;for(let c=0;c<ch;c++){const x=d[c];for(let j=0;j<n;j++){const v=x[i+j];s+=v*v}}env.push(Math.sqrt(s/(n*ch)))}
+    return{env,hop,dur:buf.duration};
+  }finally{ac.close&&ac.close()}
+}
+$('wnar').onchange=async e=>{
+  const fl=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  S.wnarName=fl.map(f=>f.name);S.wfiles=[];S.wdurs=[];
+  if(!fl.length){$('wnari').textContent='';renderWeek();return}
+  $('wnari').textContent=' analizuję…';
+  try{
+    const ens=[];for(const f of fl)ens.push(await envOf(f));
+    S.wfiles=ens.map((x,i)=>({name:fl[i].name,dur:x.dur}));
+    const paras=wParas(),w=paras.map(p=>wWords(p.text)),gen=weekNarFiles(),msg=[];
+    let durs=[];
+    if(fl.length>1&&fl.length===gen.length){ // jeden plik = jedna paczka akapitów
+      let k0=0;
+      ens.forEach((x,i)=>{const c=gen[i].count,r=splitDurations(x.env,x.hop,x.dur,c,w.slice(k0,k0+c));durs.push(...r.durs);k0+=c;if(!r.exact)msg.push(`plik ${i+1}: za mało przerw, podział wg liczby słów`)});
+    }else{
+      const env=[].concat(...ens.map(x=>x.env)),dur=ens.reduce((a,x)=>a+x.dur,0);
+      const r=splitDurations(env,ens[0].hop,dur,paras.length,w);durs=r.durs;
+      if(!r.exact)msg.push('za mało wykrytych przerw – podział wg liczby słów (popraw ręcznie w tabeli)');
+    }
+    S.wdurs=durs;
+    $('wnari').textContent=` ${fl.map(f=>f.name).join(', ')} · razem ${fmt(S.wfiles.reduce((a,f)=>a+f.dur,0))}`+(msg.length?' · UWAGA: '+msg.join('; '):' · przerwy wykryte');
+  }catch(err){$('wnari').textContent=' Nie udało się odczytać audio: '+err.message+' (render zadziała, ale ustaw czasy ręcznie)';S.wdurs=[]}
+  renderWeek();
+};
+$('wmus').onchange=e=>{const f=e.target.files[0];S.wmus=f?f.name:'';$('wmusi').textContent=f?' '+f.name:''};
+$('wintro').onchange=e=>{
+  const f=e.target.files[0];S.wintro=f?f.name:'';S.wintroLen=0;$('wintroi').textContent=f?' '+f.name:'';
+  if(!f)return;const v=document.createElement('video');v.preload='metadata';
+  v.onloadedmetadata=()=>{S.wintroLen=isFinite(v.duration)?v.duration:0;$('wintroi').textContent=` ${f.name} · ${S.wintroLen?fmt(S.wintroLen):'długość nieznana (przyjmę 8 s)'}`;URL.revokeObjectURL(v.src)};
+  v.onerror=()=>{$('wintroi').textContent=` ${f.name} · podglądu nie da się odczytać (przyjmę 8 s; render zadziała)`};
+  v.src=URL.createObjectURL(f);
+};
+for(const [id,vid] of [['wduck','wduckv'],['wthr','wthrv']])$(id).addEventListener('input',()=>{$(vid).textContent=$(id).value});
+['wdelay','wtail'].forEach(id=>$(id).addEventListener('input',updateWeekInfo));
+function weekOpts(limit){
+  const paras=wParas().filter(p=>parseTime(p.b)>parseTime(p.a));
+  if(!paras.length)throw new Error('Dodaj przynajmniej jedną scenę (poprawne „od” < „do”).');
+  if(!S.segs.length)throw new Error('Najpierw ustaw montaż (filmy, zakres „od–do”).');
+  if(!S.wfiles.length)throw new Error('Wczytaj nagranie lektora (krok 3).');
+  const all=wParas(),ok=all.map(p=>parseTime(p.b)>parseTime(p.a)),d=wDurs().filter((_,i)=>ok[i]);
+  const g=all[0]&&all[0].kind==='g'&&ok[0]?{a:parseTime(all[0].a),b:parseTime(all[0].b),text:all[0].text}:null;
+  const items=all.filter((p,i)=>ok[i]&&p.kind==='m').map(p=>({a:parseTime(p.a),b:parseTime(p.b),text:p.text}));
+  const o=opts();
+  return{...o,segs:S.segs,startSrc:S.activeSrc||1,greet:g,items,durs:d,delay:num($('wdelay').value,1.5),tail:num($('wtail').value,1),
+    narr:S.wfiles.map(f=>({name:f.name})),narVol:num($('wnvol').value,100),filmVol:num($('wfvol').value,25),
+    music:S.wmus?{name:S.wmus,vol:num($('wmvol').value,45),fadeIn:num($('wfin').value,1.5),fadeOut:num($('wfout').value,2)}:null,
+    duck:{thr:num($('wthr').value,50),strength:num($('wduck').value,80),attack:40,release:num($('wrel').value,600)},
+    introOv:S.wintro?{name:S.wintro,len:S.wintroLen||8}:null,out:($('wout').value||'w_tym_tygodniu')+'.mp4',tmp:'_segweek',limit:limit||0};
+}
+$('wdlsh').onclick=()=>{try{const r=genWeekScript(weekOpts(0));dl('render_tydzien.sh',r.script);$('wdlinfo').textContent=` ${Math.round(r.script.length/1024)} KB · film ok. ${fmt(r.total)}`}catch(e){alert(e.message)}};
+$('wdltest').onclick=()=>{try{const o=weekOpts(25);o.tmp='_segweektest';o.out=o.out.replace(/\.mp4$/,'_test.mp4');dl('render_tydzien_test.sh',genWeekScript(o).script)}catch(e){alert(e.message)}};
+renderWeek();
 renderRules();renderMoms();setMode('cal');recompute();
 </script>
 </body>

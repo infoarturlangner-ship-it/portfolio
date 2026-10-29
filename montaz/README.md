@@ -80,6 +80,20 @@ zaczyna się razem z intro i gra bez przerwy przez tytuł i momenty (ducking dzi
 Momenty to wycinki gotowego głównego montażu: mają te same cięcia (słowa, auto-zmiana), grafiki, efekty przy cięciu i dźwięki. Momenty muszą mieścić się w zakresie „od–do” montażu.
 Skrypt wznawia się po błędzie i sprawdza pliki na starcie, tak jak główny render.
 
+### „W tym tygodniu” (skrót z lektorem)
+
+Osobna sekcja w programie. Krótki film-podsumowanie, w którym lektor opowiada o scenach wybranych z głównego montażu.
+
+1. **Instrukcja dla ChatGPT** – przycisk pobiera plik z transkrypcją zakresu „od–do” i poleceniem: wybierz sceny i napisz do każdej akapit narracji. Pole „wstęp” jest opcjonalne: wpisane polecenie dodaje powitanie i najciekawszą scenę, która będzie pod nim widoczna (ChatGPT nie powtarza jej potem w skrócie). Puste pole = same sceny z transkrypcji, bez powitania.
+2. **Odpowiedź ChatGPT** (JSON: `wstep`, `momenty` z `od`/`do`/`tekst`) wczytujesz z pliku lub wklejasz. Sceny i teksty można poprawiać w tabeli.
+3. **Tekst dla lektora** – przycisk pobiera czysty tekst (akapit na scenę, między akapitami `<break time="1.0s" />`, do wyłączenia), dzielony na kilka plików po ok. 4500 znaków (limit do ustawienia).
+4. **Nagranie lektora** – wczytujesz jeden lub kilka plików audio (w kolejności nazw). Program wykrywa przerwy między akapitami i ustawia czas każdej sceny (kolumna „lektor”, można poprawić). Gdy liczba plików równa się liczbie pobranych plików tekstowych, akapity są przypisane do plików; w innym razie plik jest dzielony po najdłuższych przerwach, a gdy przerw jest za mało – proporcjonalnie do liczby słów. Scena jest przedłużana lub skracana do długości swojego akapitu, więc ostatnia scena dopasowuje się do końca lektora.
+5. **Dźwięk**: głośność lektora, głośność dźwięku z filmu (0 = wyciszony; dodatkowo przyciszany pod lektorem), opcjonalna muzyka (też ustępuje lektorowi; siła, czułość i powrót jak w „Najlepszych momentach”). Lektor wchodzi po ustawionym czasie (domyślnie 1,5 s), po nim film trwa jeszcze 1 s.
+6. **Intro** – film z kanałem alfa jest nakładką na początek (gra raz, nie wydłuża filmu).
+7. Cięcia kamer, grafiki, efekt przy cięciu i dźwięk cięcia działają tak samo jak w głównym montażu.
+
+Wynik: `render_tydzien.sh` (z wznawianiem, kontrolą plików i folderem tymczasowym jak pozostałe skrypty) oraz wersja testowa (pierwsze 25 s). Ustawienia sekcji zapisują się w projekcie.
+
 ### Głośność intro/outro i wejście dźwięku intro pod zajawką
 W sekcji „Eksport”: **głośność muzyki intro i outro** (w %, 100 = bez zmian) oraz **„dźwięk intro wchodzi pod koniec zajawki”** (sekundy, 0 = twarde cięcie).
 Przy wartości > 0 dźwięk intro wjeżdża tyle sekund przed jego obrazem, a dźwięk zajawki się wycisza; obraz zmienia się twardo.
