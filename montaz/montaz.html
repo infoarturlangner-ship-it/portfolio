@@ -159,6 +159,9 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="mut" style="margin-bottom:8px">Dla każdej części osobno podajesz zakres montażu (czas filmu 1, np. <span class="mono">1:12:05</span>), który ma wejść na sam początek. To fragment gotowego montażu (z cięciami, grafikami i efektami), potem leci intro z pliku, a potem montaż. Zostaw puste, żeby nie było zajawki. Liczba części wynika z „podziel na części" w sekcji Eksport.</div>
 <div class="row" style="margin-bottom:8px"><label>wideo z alfa nałożone na zajawkę (np. napis „W dzisiejszym odcinku")</label><input type="file" id="txf" accept="video/*,.mov,.webm"><span class="mut" id="txi"></span></div>
 <div class="hitbox" style="max-height:260px"><table id="teasers"></table></div>
+<div class="row" style="margin:8px 0"><label>transkrypcja do plików tekstowych</label><select id="tsrcsel"><option value="1">film 1</option><option value="2">film 2</option></select>
+ <button id="tdlall">⬇ pobierz wszystkie transkrypcje</button><span class="mut" id="tdlinfo"></span></div>
+<div class="mut" style="margin-bottom:8px">Plik tekstowy części zawiera tytuł i same zdania (bez czasów) tylko z głównego montażu tej części (bez zajawki i intro) i ma tę samą nazwę co film, np. <span class="mono">Mój tytuł.txt</span>. Puste pole tytułu = nazwa domyślna (<span class="mono">montaz_cz01</span>).</div>
 <h2 style="margin-top:14px">Wybór zajawek przez ChatGPT</h2>
 <div class="mut" style="margin-bottom:8px">Program generuje plik z instrukcją, listą części i transkrypcją. Wgrywasz go do ChatGPT, a odpowiedź (JSON) wczytujesz tutaj, żeby czasy zajawek same się wpisały. Zrób to po ustawieniu podziału na części.</div>
 <div class="row" style="margin-bottom:8px">
@@ -489,17 +492,41 @@ function clipSegs(segs,a,b){
   return out;
 }
 // plan części: zajawka (wycinek montażu) -> intro -> montaż -> outro; o.teasers[i] = {a,b} w sekundach
+// nazwa pliku z tytułu: bez znaków niedozwolonych w nazwach plików, spacje zwinięte, maks. 120 znaków
+function safeName(s){
+  return String(s==null?'':s).replace(/[\u0000-\u001f]/g,'').replace(/[\\/:*?"<>|`$]/g,'-').replace(/\s+/g,' ').replace(/^[\s.]+|[\s.]+$/g,'').slice(0,120).trim();
+}
 function planParts(segs,o){
-  const base=(o.out||'montaz.mp4').replace(/\.mp4$/i,''),parts=splitSegs(segs,o.n,o.snap);
+  const base=(o.out||'montaz.mp4').replace(/\.mp4$/i,''),parts=splitSegs(segs,o.n,o.snap),used=new Set();
   return parts.map((ps,i)=>{
     const hasIntro=!!o.intro&&(o.all||i===0),hasOutro=!!o.outro&&(o.all||i===parts.length-1);
     const tz=o.teasers&&o.teasers[i],teaser=tz&&tz.b>tz.a?clipSegs(segs,tz.a,tz.b):[];
     const tdur=teaser.reduce((a,s)=>a+s.b-s.a,0);
     const dur=ps.reduce((a,s)=>a+s.b-s.a,0),id=hasIntro?(o.intro.dur||0):0,od=hasOutro?(o.outro.dur||0):0;
-    return {i,segs:ps,teaser,tdur,from:ps[0].a,to:ps[ps.length-1].b,dur,total:tdur+id+dur+od,hasIntro,hasOutro,
-      events:sfxEvents(teaser,o.rules||[],0,o.defSfx).concat(sfxEvents(ps,o.rules||[],tdur+id,o.defSfx)),
-      out:parts.length===1?o.out:`${base}_cz${String(i+1).padStart(2,'0')}.mp4`};
+    const title=String((o.titles&&o.titles[i])||'').trim(),nn=String(i+1).padStart(2,'0');
+    const defName=parts.length===1?o.out:`${base}_cz${nn}.mp4`;
+    let out=defName;
+    if(safeName(title)){
+      out=safeName(title)+'.mp4';
+      if(used.has(out.toLowerCase()))out=`${safeName(title)}_cz${nn}.mp4`;   // ten sam tytuł w dwóch częściach
+    }
+    used.add(out.toLowerCase());
+    return {i,title,segs:ps,teaser,tdur,from:ps[0].a,to:ps[ps.length-1].b,dur,total:tdur+id+dur+od,hasIntro,hasOutro,
+      events:sfxEvents(teaser,o.rules||[],0,o.defSfx).concat(sfxEvents(ps,o.rules||[],tdur+id,o.defSfx)),out};
   });
+}
+// plik tekstowy z transkrypcją jednej części: tytuł, pusta linia, same zdania (bez czasów); lines = linie jednej transkrypcji
+function buildPartTranscript(p,{lines=[],offset=0,src=1}){
+  const ls=lines.map(l=>({t:src===2?l.t0-offset:l.t0,t1:src===2?l.t1-offset:l.t1,text:String(l.text).replace(/>>/g,' ').replace(/\s+/g,' ').trim()}))
+    .filter(l=>l.text&&l.t>=p.from&&l.t<p.to).sort((a,b)=>a.t-b.t);
+  const paras=[];let cur=[],last=null;
+  for(const l of ls){
+    if(last!=null&&l.t-last>2.5&&cur.length){paras.push(cur.join(' '));cur=[]}
+    cur.push(l.text);last=l.t1;
+  }
+  if(cur.length)paras.push(cur.join(' '));
+  const title=p.title||p.out.replace(/\.mp4$/i,'');
+  return title+'\n\n'+paras.join('\n\n')+'\n';
 }
 // szybki test jednej części: zajawka + intro + pierwsze `limit` s montażu (bez outro)
 function planTest(segs,o,k,limit=10){
@@ -1137,16 +1164,19 @@ function loadExtra(kind,file){
 $('fintro').onchange=e=>loadExtra('intro',e.target.files[0]);
 $('foutro').onchange=e=>loadExtra('outro',e.target.files[0]);
 const planOpts=()=>{const o=opts();return{n:+$('nparts').value||1,snap:$('psnap').value==='1',all:$('pall').checked,intro:o.intro,outro:o.outro,out:o.out,rules:S.rules,defSfx:o.defSfx,
-  teasers:S.teasers.map(t=>({a:parseTime(t.a),b:parseTime(t.b)}))}};
+  teasers:S.teasers.map(t=>({a:parseTime(t.a),b:parseTime(t.b)})),titles:S.teasers.map(t=>t.title||'')}};
 function renderTeaserRows(n){
   while(S.teasers.length<n)S.teasers.push({a:'',b:''});
-  const tb=$('teasers');tb.innerHTML='<tr><th>część</th><th>od</th><th>do</th><th>długość</th><th></th><th></th></tr>';
+  const tb=$('teasers');tb.innerHTML='<tr><th>część</th><th>od</th><th>do</th><th>długość</th><th>tytuł odcinka (nazwa pliku)</th><th></th><th></th><th></th></tr>';
   for(let i=0;i<n;i++){
     const tr=document.createElement('tr');tr.dataset.i=i;
     tr.innerHTML=`<td>${i+1}</td><td><input type="text" class="ta" placeholder="g:mm:ss" style="width:95px"></td><td><input type="text" class="tb" placeholder="g:mm:ss" style="width:95px"></td><td class="mono td">—</td>
-      <td><button class="tp">▶ podgląd zajawki</button></td><td><button class="tt">⬇ test: zajawka + intro + 10 s</button></td>`;
+      <td><input type="text" class="ti" placeholder="puste = domyślny" style="width:min(300px,34vw)"><div class="mut mono tn" style="font-size:11px"></div></td>
+      <td><button class="tp">▶ podgląd zajawki</button></td><td><button class="tt">⬇ test: zajawka + intro + 10 s</button></td><td><button class="tr">⬇ transkrypcja</button></td>`;
     const ta=tr.querySelector('.ta'),tbx=tr.querySelector('.tb');ta.value=S.teasers[i].a;tbx.value=S.teasers[i].b;
     ta.oninput=()=>{S.teasers[i].a=ta.value;renderExport()};tbx.oninput=()=>{S.teasers[i].b=tbx.value;renderExport()};
+    const ti=tr.querySelector('.ti');ti.value=S.teasers[i].title||'';ti.oninput=()=>{S.teasers[i].title=ti.value;renderExport()};
+    tr.querySelector('.tr').onclick=()=>downloadTranscripts([i]);
     tr.querySelector('.tp').onclick=()=>previewRange(parseTime(S.teasers[i].a),parseTime(S.teasers[i].b),true);
     tr.querySelector('.tt').onclick=()=>{
       if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres, słowa).');return}
@@ -1165,6 +1195,7 @@ function updateTeaserInfo(plan){
       else{txt=fmt(b-a);if(p&&Math.abs(p.tdur-(b-a))>0.1)txt+=` (w montażu: ${fmt(p.tdur)} — reszta poza zakresem)`}
     }
     tr.querySelector('.td').textContent=txt;
+    if(p)tr.querySelector('.tn').textContent='→ '+p.out;
   });
 }
 function renderExport(){
@@ -1198,7 +1229,7 @@ $('load').onchange=async e=>{
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
   if(p.flash){$('flashon').checked=!!p.flash.on;$('flashs').value=p.flash.strength;$('flashd').value=p.flash.dur;effLabels()}
-  S.teasers=(p.teasers||[]).map(t=>({a:t.a||'',b:t.b||''}));S.fxName=p.fxName||'';S.txName=p.txName||'';
+  S.teasers=(p.teasers||[]).map(t=>({a:t.a||'',b:t.b||'',title:t.title||''}));S.fxName=p.fxName||'';S.txName=p.txName||'';
   if(p.auto!=null)$('auto').checked=p.auto;for(const k of['autosec','ovin','ovout'])if(p[k]!=null)$(k).value=p[k];
   if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
@@ -1262,12 +1293,23 @@ $('gptdl').onclick=()=>{
   dl('instrukcja_chatgpt.txt',txt);
   $('gptinfo').textContent=` ${plan.length} części · ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
 };
+// pobieranie transkrypcji części (idx = tablica indeksów części); kilka plików pobiera się jeden po drugim
+function downloadTranscripts(idx){
+  const src=+$('tsrcsel').value,lines=(src===2?S.l2:S.l1)||[];
+  if(!lines.length){alert('Wczytaj transkrypcję filmu '+src+' (sekcja 1).');return}
+  const plan=planParts(S.segs,planOpts());
+  if(!plan.length){alert('Najpierw ustaw montaż (filmy, zakres, słowa).');return}
+  const list=idx.filter(i=>plan[i]);
+  list.forEach((i,k)=>setTimeout(()=>dl(plan[i].out.replace(/\.mp4$/i,'')+'.txt',buildPartTranscript(plan[i],{lines,offset:offset(),src}),'text/plain;charset=utf-8'),k*350));
+  $('tdlinfo').textContent=` pobieram ${list.length} plik(ów)`;
+}
+$('tdlall').onclick=()=>downloadTranscripts(S.teasers.map((_,i)=>i).slice(0,Math.max(1,planParts(S.segs,planOpts()).length)));
 function applyTeaserList(list){
   const plan=planParts(S.segs,planOpts()),warn=[];let ok=0;
   for(const x of list){
     if(x.part>plan.length&&plan.length){warn.push(`część ${x.part} nie istnieje (jest ${plan.length})`);continue}
     while(S.teasers.length<x.part)S.teasers.push({a:'',b:''});
-    S.teasers[x.part-1]={a:x.a,b:x.b};ok++;
+    S.teasers[x.part-1]={...S.teasers[x.part-1],a:x.a,b:x.b};ok++;
     const p=plan[x.part-1],a=parseTime(x.a),b=parseTime(x.b);
     if(!(b>a))warn.push(`część ${x.part}: „do” nie jest większe niż „od”`);
     else if(p&&(a<p.from-1||b>p.to+1))warn.push(`część ${x.part}: zakres ${x.a}–${x.b} wychodzi poza część (${fmtHMS(p.from)}–${fmtHMS(p.to)})`);

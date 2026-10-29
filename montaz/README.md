@@ -85,6 +85,13 @@ W sekcji „Eksport”: **głośność muzyki intro i outro** (w %, 100 = bez zm
 Przy wartości > 0 dźwięk intro wjeżdża tyle sekund przed jego obrazem, a dźwięk zajawki się wycisza; obraz zmienia się twardo.
 Dźwięk intro kończy się wtedy o tyle samo wcześniej niż jego obraz — przy domyślnych 1,5 s wchodzi w tym miejscu dźwięk montażu.
 
+### Tytuły odcinków i transkrypcje części
+W tabeli zajawek (sekcja „Zajawka”) przy każdej części jest pole **„tytuł odcinka (nazwa pliku)”**. Wpisany tytuł staje się nazwą wyeksportowanego filmu (znaki niedozwolone w nazwach plików
+`\ / : * ? " < > | $` i znak ` zamieniane na myślniki, maks. 120 znaków); pusty tytuł = nazwa domyślna (`montaz_cz01.mp4`). Pod polem widać, jaka nazwa powstanie.
+Jeśli dwie części mają ten sam tytuł, druga dostaje końcówkę `_czNN`. Przycisk **„⬇ transkrypcja”** pobiera plik tekstowy z tytułem (tak jak go wpisałeś) i samymi zdaniami (bez czasów)
+z głównego montażu tej części (bez zajawki i intro), o nazwie takiej jak film (`Tytuł.txt`). **„⬇ pobierz wszystkie transkrypcje”** pobiera pliki wszystkich części po kolei.
+Transkrypcję bierze z jednego filmu (wybór: film 1 / film 2). Tytuły zapisują się w projekcie.
+
 ### Wybór zajawek przez ChatGPT
 W sekcji „Zajawka” po ustawieniu podziału na części:
 1. ustaw długość zajawki (od–do), wybierz, z którego filmu ma być transkrypcja, dopisz opcjonalny kontekst;
