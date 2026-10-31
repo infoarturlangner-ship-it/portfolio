@@ -155,6 +155,13 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 </section>
 
 <section>
+<h2>Nakładki wideo na słowa (kanał alfa)</h2>
+<div class="mut" style="margin-bottom:8px">Film z przezroczystością (.mov/.webm), który gra na najwyższej warstwie, gdy padnie dane słowo. Zasłania obraz na całym kadrze (jak efekt przy cięciu), odtwarza się raz od początku i nie powtarza, dopóki trwa. Możesz dodać kilka takich nakładek. Dotyczy całego programu (montaż, zajawka, momenty, tydzień). Podgląd w przeglądarce ich nie pokazuje, widać je w renderze. Plik leży w folderze z filmami. Dźwięk nakładki nie jest używany.</div>
+<div id="vtrlist"></div>
+<div class="row"><button id="addvtr">+ dodaj nakładkę na słowo</button><span class="mut" id="vtrinfo"></span></div>
+</section>
+
+<section>
 <h2>Zajawka „W dzisiejszym odcinku"</h2>
 <div class="mut" style="margin-bottom:8px">Dla każdej części osobno podajesz zakres montażu (czas filmu 1, np. <span class="mono">1:12:05</span>), który ma wejść na sam początek. To fragment gotowego montażu (z cięciami, grafikami i efektami), potem leci intro z pliku, a potem montaż. Zostaw puste, żeby nie było zajawki. Liczba części wynika z „podziel na części" w sekcji Eksport.</div>
 <div class="row" style="margin-bottom:8px"><label>wideo z alfa nałożone na zajawkę (np. napis „W dzisiejszym odcinku")</label><input type="file" id="txf" accept="video/*,.mov,.webm"><span class="mut" id="txi"></span></div>
@@ -606,11 +613,32 @@ function flashFilter(o){
   return `eq=brightness='${n3(0.6*s)}*${e}':saturation='1-${n3(0.5*s)}*${e}':eval=frame`;
 }
 // obraz jednego ujęcia: efekt rozjaśnienia (tylko po cięciu), grafiki, wideo z alfa po cięciu, wideo z alfa zajawki
+// nakładki wideo z alfą uruchamiane słowem: zdarzenia {name,t,len} na osi montażu (czas filmu 1)
+function trigEvents(rules,w1,w2,offset){
+  const evs=[];
+  (rules||[]).forEach(r=>{
+    if(!r.q||!r.name)return;
+    const len=Math.max(0.2,+r.len||5);let hs=[];
+    if(r.qsrc!=='2')hs.push(...findHits(w1||[],r.q,1,offset,0,'toggle'));
+    if(r.qsrc!=='1')hs.push(...findHits(w2||[],r.q,2,offset,0,'toggle'));
+    hs.sort((a,b)=>a.t-b.t);
+    let end=-1e9;
+    for(const x of hs){if(x.t>=end){evs.push({name:r.name,t:x.t,len});end=x.t+len}}
+  });
+  return evs.sort((a,b)=>a.t-b.t);
+}
+// które nakładki z słowami są widoczne w segmencie s (delay = opóźnienie względem początku segmentu, ss = przesunięcie w pliku)
+function trigFor(o,s){
+  const out=[];
+  (o.trigOv||[]).forEach(e=>{if(e.t<s.b-0.01&&e.t+e.len>s.a+0.01)out.push({name:e.name,delay:Math.max(0,e.t-s.a),ss:Math.max(0,s.a-e.t)})});
+  return out;
+}
 function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
   const ovs=(o.overlays||[]).filter(v=>v.name&&(v.film==='both'||+v.film===s.src));
   const fl=cut?flashFilter(o):'',base=fl?`${vf},${fl}`:vf;
   const fx=cut&&o.fx&&o.fx.name?o.fx.name:'';
-  if(!ovs.length&&!fx&&!textFile)return{inputs:[],vf:base};
+  const trig=trigFor(o,s);
+  if(!ovs.length&&!fx&&!textFile&&!trig.length)return{inputs:[],vf:base};
   const inputs=[],parts=[`[0:v]${base}[b0]`];let n=0,cur='b0';
   ovs.forEach(v=>{
     n++;inputs.push('-i '+q(v.name));
@@ -626,6 +654,11 @@ function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
   };
   if(fx)full(fx,'');
   if(textFile)full(textFile,textOffset>0.001?`-ss ${n3(textOffset)} `:'');
+  trig.forEach(x=>{
+    n++;inputs.push(`${x.ss>0.001?'-ss '+n3(x.ss)+' ':''}${/\.webm$/i.test(x.name)?'-c:v libvpx-vp9 ':''}-i ${q(x.name)}`);
+    parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba,setpts=PTS-STARTPTS+${n3(x.delay)}/TB[o${n}]`);
+    parts.push(`[${cur}][o${n}]overlay=0:0:eof_action=pass:format=auto[b${n}]`);cur='b'+n;
+  });
   parts.push(`[${cur}]format=yuv420p[vo]`);
   return{inputs,graph:parts.join(';')};
 }
@@ -697,6 +730,7 @@ function genScript(plan,o){
       const af=`aresample=48000,aformat=channel_layouts=stereo,afade=t=in:d=0.01,afade=t=out:st=${n3(Math.max(0,dur-0.01))}:d=0.01`;
       const sv=segVideo(o,vf,s,{cut,textFile:textOffset==null?'':textName,textOffset:textOffset||0});
       (o.overlays||[]).filter(v=>v.name&&(v.film==='both'||+v.film===s.src)).forEach(v=>need.add(v.name));
+      trigFor(o,s).forEach(x=>need.add(x.name));
       if(cut&&o.fx&&o.fx.name)need.add(o.fx.name);
       if(textOffset!=null&&textName)need.add(textName);
       const tmp=`${T}/${name}.tmp.mkv`,inA=`-ss ${n3(ss)} -t ${n3(dur)} -i ${q(f)}`;
@@ -854,6 +888,7 @@ function segCommand(o,vf,venc,s,tmpOut,cut,tx){
   const need=[f,...(o.overlays||[]).filter(v=>v.name&&(v.film==='both'||+v.film===s.src)).map(v=>v.name)];
   if(cut&&o.fx&&o.fx.name)need.push(o.fx.name);
   if(tx&&tx.file)need.push(tx.file);
+  trigFor(o,s).forEach(x=>need.push(x.name));
   const cmd=sv.graph
     ?`ffmpeg -y -loglevel error ${inA} ${sv.inputs.join(' ')} -filter_complex "${sv.graph}" -map "[vo]" -map 0:a -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`
     :`ffmpeg -y -loglevel error ${inA} -vf "${sv.vf}" -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`;
@@ -1374,7 +1409,7 @@ $('tl').onclick=e=>{
 };
 
 // eksport
-const opts=()=>({introMusic:S.imName?{name:S.imName,vol:num($('imvol').value,100),fo:num($('imfo').value,1.5),mute:$('immute').checked}:null,defSfx:defSfxCfg(),introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+const opts=()=>({trigOv:trigEvents(S.vtr,S.w1,S.w2,offset()),introMusic:S.imName?{name:S.imName,vol:num($('imvol').value,100),fo:num($('imfo').value,1.5),mute:$('immute').checked}:null,defSfx:defSfxCfg(),introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
 function loadExtra(kind,file){
   if(!file){S[kind+'F']='';S[kind+'Dur']=0;$('i'+kind).textContent='';recompute();return}
   const v=document.createElement('video');v.preload='metadata';v.src=URL.createObjectURL(file);
@@ -1434,7 +1469,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,set:Object.fromEntries(['waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,set:Object.fromEntries(['waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1446,6 +1481,7 @@ $('load').onchange=async e=>{
   if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
+  S.vtr=(p.vtr||[]).map(r=>({q:r.q||'',qsrc:r.qsrc||'1',name:r.name||'',len:+r.len||5,nofile:!!r.name}));renderVtr();
   if(p.wk){S.week=p.wk.week||{greet:null,items:[]};S.wmus=p.wk.mus||'';S.wintro=p.wk.intro||'';S.wpsfx=p.wk.psfx||'';S.wdurs=[];S.wfiles=[];for(const [k,v] of Object.entries(p.wk.set||{})){if($(k)){if($(k).type==='checkbox')$(k).checked=!!v;else $(k).value=v}}for(const id of['wduck','wthr'])$(id+'v').textContent=$(id).value;renderWeek()}
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
@@ -1693,6 +1729,35 @@ $('txf').onchange=e=>fxFile('tx',e.target.files[0]);
 function effLabels(){$('flashsv').textContent=$('flashs').value+'%';$('flashdv').textContent=(+$('flashd').value).toFixed(2)+' s'}
 ['flashon','flashs','flashd'].forEach(id=>$(id).addEventListener('input',()=>{effLabels();recompute()}));
 $('flashon').addEventListener('change',recompute);
+
+// nakładki wideo na słowa
+S.vtr=[];
+function vtrInfo(){
+  const ev=trigEvents(S.vtr,S.w1,S.w2,offset());
+  $('vtrinfo').textContent=S.vtr.length?` wystąpień w materiale: ${ev.length}`:'';
+}
+function renderVtr(){
+  const box=$('vtrlist');box.innerHTML='';
+  S.vtr.forEach((r,i)=>{
+    const d=document.createElement('div');d.className='row';d.style.marginBottom='6px';
+    d.innerHTML=`<label>słowo</label><input type="text" class="vq" style="width:150px"><select class="vs"><option value="1">z transkrypcji filmu 1</option><option value="2">filmu 2</option><option value="3">obu</option></select>
+      <label>plik alfa</label><input type="file" class="vf" accept="video/*,.mov,.webm"><span class="mut vn"></span><label>długość (s)</label><input type="number" class="vl" min="0.2" step="0.1" style="width:65px"><button class="vx">✕</button>`;
+    const q_=d.querySelector('.vq'),s_=d.querySelector('.vs'),l_=d.querySelector('.vl'),f_=d.querySelector('.vf');
+    q_.value=r.q;s_.value=r.qsrc;l_.value=r.len;d.querySelector('.vn').textContent=r.name?' '+r.name+(r.nofile?' – wczytaj plik ponownie':''):'';
+    q_.oninput=()=>{r.q=q_.value;vtrInfo();recompute()};s_.onchange=()=>{r.qsrc=s_.value;vtrInfo();recompute()};l_.oninput=()=>{r.len=+l_.value||5;vtrInfo();recompute()};
+    f_.onchange=e=>{
+      const f=e.target.files[0];if(!f)return;r.name=f.name;r.nofile=false;d.querySelector('.vn').textContent=' '+f.name;
+      const v=document.createElement('video');v.preload='metadata';
+      v.onloadedmetadata=()=>{if(isFinite(v.duration)&&v.duration>0){r.len=Math.round(v.duration*100)/100;l_.value=r.len;vtrInfo();recompute()}URL.revokeObjectURL(v.src)};
+      v.src=URL.createObjectURL(f);vtrInfo();recompute();
+    };
+    d.querySelector('.vx').onclick=()=>{S.vtr.splice(i,1);renderVtr();vtrInfo();recompute()};
+    box.appendChild(d);
+  });
+  vtrInfo();
+}
+$('addvtr').onclick=()=>{S.vtr.push({q:'',qsrc:'1',name:'',len:5});renderVtr()};
+renderVtr();
 
 // ============ „W tym tygodniu” ============
 S.week={greet:null,items:[]};S.wdurs=[];S.wfiles=[];S.wmus='';S.wintro='';S.wintroLen=0;S.wnarName=[];

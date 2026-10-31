@@ -123,6 +123,10 @@ Pole **„ignoruj to samo słowo z drugiej transkrypcji przez … s”** (domyś
 (opóźnienie czatu), więc obraz nie wraca na poprzedni film. Powtórki w tej samej transkrypcji (np. „kontakt, kontakt”) zostają.
 Liczba pominiętych trafień jest widoczna w podsumowaniu nad listą trafień. 0 = wyłączone.
 
+### Nakładki wideo na słowa (kanał alfa)
+
+Sekcja „Nakładki wideo na słowa”: dodajesz wiersz (słowo, z której transkrypcji, plik .mov/.webm z alfą). Gdy słowo pada w materiale, film gra raz na najwyższej warstwie, na całym kadrze, od początku do końca (długość program odczytuje z pliku, można poprawić). Nakładka trwa ciągle także przez cięcia kamer i nie powtarza się, dopóki trwa. Można dodać kilka nakładek. Działa w montażu, zajawce, momentach i skrócie „W tym tygodniu”. Dźwięk nakładki nie jest używany, a podgląd w przeglądarce jej nie pokazuje (widać ją w renderze). Ustawienia zapisują się w projekcie.
+
 ### Efekt przy cięciu
 Sekcja „Efekt przy cięciu” (domyślnie wyłączona):
 - **rozjaśnienie** po każdym cięciu z płynnym powrotem do naturalnych kolorów; suwaki siły i czasu (ease-out);
