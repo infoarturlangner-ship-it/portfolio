@@ -90,7 +90,8 @@ Osobna sekcja w programie. Krótki film-podsumowanie, w którym lektor opowiada 
 4. **Nagranie lektora** – wczytujesz jeden lub kilka plików audio (w kolejności nazw). Program wykrywa przerwy między akapitami i ustawia czas każdej sceny (kolumna „lektor”, można poprawić). Gdy liczba plików równa się liczbie pobranych plików tekstowych, akapity są przypisane do plików; w innym razie plik jest dzielony po najdłuższych przerwach, a gdy przerw jest za mało – proporcjonalnie do liczby słów. Scena jest przedłużana lub skracana do długości swojego akapitu, więc ostatnia scena dopasowuje się do końca lektora.
 5. **Dźwięk**: głośność lektora, głośność dźwięku z filmu (0 = wyciszony; dodatkowo przyciszany pod lektorem), opcjonalna muzyka (też ustępuje lektorowi; siła, czułość i powrót jak w „Najlepszych momentach”). Lektor wchodzi po ustawionym czasie (domyślnie 1,5 s), po nim film trwa jeszcze 1 s.
 6. **Intro** – film z kanałem alfa jest nakładką na początek (gra raz, nie wydłuża filmu).
-7. Cięcia kamer, grafiki, efekt przy cięciu i dźwięk cięcia działają tak samo jak w głównym montażu.
+7. Cięcia kamer, grafiki, efekt przy cięciu i dźwięk cięcia działają tak samo jak w głównym montażu. Dodatkowo możesz wgrać osobny dźwięk, który gra na granicy akapitów (koniec jednego wątku, początek kolejnego): plik, głośność i przesunięcie (ujemne = chwilę przed zmianą sceny).
+8. Instrukcja dla ChatGPT każe pisać narrację w czasie przyszłym („W tym tygodniu … będą walczyć…”) i zwracać się do widzów; w polu „zwrot do widzów” wpisujesz np. „Cześć kooperacjusze!”.
 
 Wynik: `render_tydzien.sh` (z wznawianiem, kontrolą plików i folderem tymczasowym jak pozostałe skrypty) oraz wersja testowa (pierwsze 25 s). Ustawienia sekcji zapisują się w projekcie.
 

@@ -256,6 +256,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
  <label>transkrypcja</label><select id="wsrcsel"><option value="1">film 1</option><option value="2">film 2</option><option value="3">oba (z oznaczeniem)</option></select>
 </div>
 <div class="row" style="margin-bottom:8px"><label>kontekst (opcjonalnie)</label><input type="text" id="wctx" placeholder="np. gra Fortnite, dwóch graczy, polski komentarz" style="width:min(520px,100%)"></div>
+<div class="row" style="margin-bottom:8px"><label>zwrot do widzów (opcjonalnie)</label><input type="text" id="waud" placeholder="np. Cześć kooperacjusze!" style="width:min(320px,100%)"><span class="mut">Narracja jest zawsze w czasie przyszłym („w tym tygodniu … będą walczyć…”).</span></div>
 <div class="row" style="margin-bottom:8px"><label>wstęp (opcjonalnie) – polecenie dla ChatGPT</label></div>
 <div class="row" style="margin-bottom:8px"><textarea id="wgreet" placeholder="np. Przywitaj widzów po imieniu, krótko i z humorem zapowiedz, co działo się w tym tygodniu. Zostaw puste, jeśli lektor ma od razu opowiadać o scenach." style="height:62px"></textarea></div>
 <div class="mut" style="margin-bottom:8px">Gdy wstęp jest wpisany, ChatGPT dołoży powitanie i wybierze najciekawszą scenę, która będzie widoczna pod powitaniem (nie powtórzy jej potem w skrócie). Gdy puste: tylko sceny z transkrypcji, bez powitania.</div>
@@ -294,6 +295,9 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
  <label>wejście/wyjście (s)</label><input type="number" id="wfin" value="1.5" min="0" step="0.5" style="width:55px"><input type="number" id="wfout" value="2" min="0" step="0.5" style="width:55px">
 </div>
 <div class="mut" style="margin-bottom:8px">Dźwięk z filmu (rozmowa z gry) jest ściszony do ustawionej wartości (0 = całkiem wyciszony) i dodatkowo przyciszany, gdy mówi lektor. Muzyka też ustępuje lektorowi.</div>
+<div class="row" style="margin-bottom:8px"><label>dźwięk przy przejściu do kolejnego akapitu (opcjonalnie)</label><input type="file" id="wpsfx" accept="audio/*,.mp3,.wav,.m4a"><span class="mut" id="wpsfxi"></span>
+ <label>głośność %</label><input type="number" id="wpvol" value="100" min="0" max="300" step="5" style="width:65px"><label>przesunięcie (s)</label><input type="number" id="wpoff" value="0" step="0.1" style="width:65px"></div>
+<div class="mut" style="margin-bottom:8px">Gra w momencie, gdy kończy się jeden wątek i zaczyna kolejny (granica scen/akapitów). Dźwięki cięć kamer w obrębie sceny zostają takie same jak w głównym montażu. Przesunięcie ujemne = dźwięk zaczyna się chwilę przed zmianą sceny.</div>
 <div class="row" style="margin-bottom:12px"><label>intro „W tym tygodniu” – film z alfą (.mov/.webm)</label><input type="file" id="wintro" accept="video/*,.mov,.webm"><span class="mut" id="wintroi"></span></div>
 <div class="mut" style="margin-bottom:12px">Intro jest nakładką na początek skrótu (gra raz, nie wydłuża filmu). Jego długość program odczytuje z pliku; jeśli się nie uda, przyjmie 8 s.</div>
 
@@ -1071,7 +1075,7 @@ function splitDurations(env,hop,dur,k,weights){
   return{durs:w.map(x=>dur*x/sum),exact:false,gaps:runs.map(r=>+r.len.toFixed(2))};
 }
 // instrukcja dla ChatGPT: skrót materiału + narracja
-function buildWeekPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,targetMin=4,cmin=8,cmax=25,ctx='',greetPrompt=''}){
+function buildWeekPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,targetMin=4,cmin=8,cmax=25,ctx='',greetPrompt='',audience=''}){
   const both=src==='3',lines=[];
   if(src!=='2')lines1.forEach(l=>lines.push({t:l.t0,text:l.text,tag:'F1'}));
   if(src!=='1')lines2.forEach(l=>lines.push({t:l.t0-offset,text:l.text,tag:'F2'}));
@@ -1084,7 +1088,9 @@ function buildWeekPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,ta
    `- Docelowa długość skrótu: ok. ${targetMin} min, czyli narracja ok. ${words} słów (lektor mówi ok. 140 słów na minutę).`,
    '- Wybierz momenty w kolejności chronologicznej. Do KAŻDEGO momentu napisz jeden akapit narracji (pole "tekst").',
    `- Każdy moment to jeden ciągły zakres czasu o długości od ${cmin} do ${cmax} sekund. Akapit ma opisywać dokładnie tę scenę; jego długość (przy ok. 2,3 słowa na sekundę) powinna być zbliżona do długości sceny.`,
-   '- Narracja ma być po polsku, żywa i zwięzła, w stylu podsumowania tygodnia. Opieraj się wyłącznie na tym, co wynika z transkrypcji; niczego nie zmyślaj.',
+   '- Narracja ma być po polsku, żywa i zwięzła, w stylu zapowiedzi tygodnia. Opieraj się wyłącznie na tym, co wynika z transkrypcji; niczego nie zmyślaj.',
+   '- WAŻNE: cała narracja jest w CZASIE PRZYSZŁYM, jako zapowiedź tego, co wydarzy się „w tym tygodniu” (nie opisuj scen w czasie przeszłym ani teraźniejszym). Przykład stylu: „W tym tygodniu kooperacyjni będą walczyć o przetrwanie na mapach nowego sezonu Fortnite. Spotkają niebezpieczeństwa, rozpoczynając misję w Zatoce Piratów.”',
+   '- Zwracaj się do widzów'+(String(audience||'').trim()?' tak: '+String(audience).trim():' po imieniu grupy, np. „Cześć kooperacjusze!”')+' (dotyczy powitania, jeśli jest, oraz ewentualnych zwrotów do widzów w tekście).',
    '- Pisz tekst do czytania na głos: pełne zdania, bez emoji, bez nawiasów, bez didaskaliów, liczby słownie, bez cudzysłowów wokół tytułów.',
    '- Początek i koniec sceny dopasuj do granic zdań/linii, żeby scena była zrozumiała sama w sobie. Czasy w transkrypcji są przybliżone (±1–2 s), więc zostaw margines.',
    '- Momenty nie mogą się nakładać.');
@@ -1154,6 +1160,16 @@ function genWeekScript(o){
       `[n3][fd][md]amix=inputs=3:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
   }else{
     g.push(`[nar]asplit=2[n1][n3]`,`${film}volume=${vol(o.filmVol)}[f1]`,`[f1][n1]sidechaincompress=${sc}[fd]`,`[n3][fd]amix=inputs=2:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
+  }
+  const pz=o.paraSfx&&o.paraSfx.name?o.paraSfx:null;
+  if(pz){
+    let ct=0;const pe=[];
+    clips.forEach((c,ci)=>{if(ci>0){const at=ct+(+pz.off||0);if(at<tot-0.05)pe.push({file:pz.name,to:Math.max(0,at),vol:pctVol(pz.vol)})}ct+=c.D});
+    if(pe.length){
+      need.add(pz.name);
+      const last=g.length-1;g[last]=g[last].replace(/\[a\]$/,'[mx]');
+      const sf=sfxFilter(pe,'[mx]',mixIn.length);sf.files.forEach(f=>mixIn.push('-i '+q(f)));g.push(sf.graph);
+    }
   }
   const out=o.out||'w_tym_tygodniu.mp4',tflag=limit?` -t ${n3(tot)}`:'';
   const mixCmd=`ffmpeg -y -loglevel error ${mixIn.join(' ')} -filter_complex "${g.join(';')}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k${tflag} ${q(out)}`;
@@ -1418,7 +1434,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},wk:{week:S.week,mus:S.wmus,intro:S.wintro,set:Object.fromEntries(['wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,set:Object.fromEntries(['waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1430,7 +1446,7 @@ $('load').onchange=async e=>{
   if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
-  if(p.wk){S.week=p.wk.week||{greet:null,items:[]};S.wmus=p.wk.mus||'';S.wintro=p.wk.intro||'';S.wdurs=[];S.wfiles=[];for(const [k,v] of Object.entries(p.wk.set||{})){if($(k)){if($(k).type==='checkbox')$(k).checked=!!v;else $(k).value=v}}for(const id of['wduck','wthr'])$(id+'v').textContent=$(id).value;renderWeek()}
+  if(p.wk){S.week=p.wk.week||{greet:null,items:[]};S.wmus=p.wk.mus||'';S.wintro=p.wk.intro||'';S.wpsfx=p.wk.psfx||'';S.wdurs=[];S.wfiles=[];for(const [k,v] of Object.entries(p.wk.set||{})){if($(k)){if($(k).type==='checkbox')$(k).checked=!!v;else $(k).value=v}}for(const id of['wduck','wthr'])$(id+'v').textContent=$(id).value;renderWeek()}
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
   if(p.flash){$('flashon').checked=!!p.flash.on;$('flashs').value=p.flash.strength;$('flashd').value=p.flash.dur;effLabels()}
@@ -1726,7 +1742,7 @@ $('wgen').onclick=()=>{
   if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
   const src=$('wsrcsel').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
   if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
-  const txt=buildWeekPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),targetMin:num($('wmin').value,4),cmin:num($('wcmin').value,8),cmax:num($('wcmax').value,25),ctx:$('wctx').value,greetPrompt:$('wgreet').value});
+  const txt=buildWeekPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),targetMin:num($('wmin').value,4),cmin:num($('wcmin').value,8),cmax:num($('wcmax').value,25),ctx:$('wctx').value,greetPrompt:$('wgreet').value,audience:$('waud').value});
   dl('instrukcja_chatgpt_tydzien.txt',txt);
   $('wgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
 };
@@ -1770,6 +1786,8 @@ $('wnar').onchange=async e=>{
   }catch(err){$('wnari').textContent=' Nie udało się odczytać audio: '+err.message+' (render zadziała, ale ustaw czasy ręcznie)';S.wdurs=[]}
   renderWeek();
 };
+S.wpsfx='';
+$('wpsfx').onchange=e=>{const f=e.target.files[0];S.wpsfx=f?f.name:'';$('wpsfxi').textContent=f?' '+f.name:''};
 $('wmus').onchange=e=>{const f=e.target.files[0];S.wmus=f?f.name:'';$('wmusi').textContent=f?' '+f.name:''};
 $('wintro').onchange=e=>{
   const f=e.target.files[0];S.wintro=f?f.name:'';S.wintroLen=0;$('wintroi').textContent=f?' '+f.name:'';
@@ -1793,7 +1811,7 @@ function weekOpts(limit){
     narr:S.wfiles.map(f=>({name:f.name})),narVol:num($('wnvol').value,100),filmVol:num($('wfvol').value,25),
     music:S.wmus?{name:S.wmus,vol:num($('wmvol').value,45),fadeIn:num($('wfin').value,1.5),fadeOut:num($('wfout').value,2)}:null,
     duck:{thr:num($('wthr').value,50),strength:num($('wduck').value,80),attack:40,release:num($('wrel').value,600)},
-    introOv:S.wintro?{name:S.wintro,len:S.wintroLen||8}:null,out:($('wout').value||'w_tym_tygodniu')+'.mp4',tmp:'_segweek',limit:limit||0};
+    paraSfx:S.wpsfx?{name:S.wpsfx,vol:num($('wpvol').value,100),off:num($('wpoff').value,0)}:null,introOv:S.wintro?{name:S.wintro,len:S.wintroLen||8}:null,out:($('wout').value||'w_tym_tygodniu')+'.mp4',tmp:'_segweek',limit:limit||0};
 }
 $('wdlsh').onclick=()=>{try{const r=genWeekScript(weekOpts(0));dl('render_tydzien.sh',r.script);$('wdlinfo').textContent=` ${Math.round(r.script.length/1024)} KB · film ok. ${fmt(r.total)}`}catch(e){alert(e.message)}};
 $('wdltest').onclick=()=>{try{const o=weekOpts(25);o.tmp='_segweektest';o.out=o.out.replace(/\.mp4$/,'_test.mp4');dl('render_tydzien_test.sh',genWeekScript(o).script)}catch(e){alert(e.message)}};
