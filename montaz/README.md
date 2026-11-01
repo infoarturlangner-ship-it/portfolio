@@ -93,6 +93,8 @@ Osobna sekcja w programie. Krótki film-podsumowanie, w którym lektor opowiada 
 7. Cięcia kamer, grafiki, efekt przy cięciu i dźwięk cięcia działają tak samo jak w głównym montażu. Dodatkowo możesz wgrać osobny dźwięk, który gra na granicy akapitów (koniec jednego wątku, początek kolejnego): plik, głośność i przesunięcie (ujemne = chwilę przed zmianą sceny).
 8. Instrukcja dla ChatGPT każe pisać narrację w czasie przyszłym („W tym tygodniu … będą walczyć…”) i zwracać się do widzów; w polu „zwrot do widzów” wpisujesz np. „Cześć kooperacjusze!”.
 
+Oprócz intro można wgrać **nakładkę w pętli** (film z alfą): po ustawionym czasie (domyślnie 8 s) włącza się na najwyższej warstwie i powtarza się w pętli do końca skrótu. Długość pętli program odczytuje z pliku.
+
 Wynik: `render_tydzien.sh` (z wznawianiem, kontrolą plików i folderem tymczasowym jak pozostałe skrypty) oraz wersja testowa (pierwsze 25 s). Ustawienia sekcji zapisują się w projekcie.
 
 ### Głośność intro/outro i wejście dźwięku intro pod zajawką
