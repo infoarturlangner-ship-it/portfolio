@@ -672,9 +672,9 @@ function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
     parts.push(`[${cur}][o${n}]overlay=0:0:eof_action=pass:format=auto[b${n}]`);cur='b'+n;
   });
   if(lp){
-    n++;inputs.push(`${/\.webm$/i.test(lp.name)?'-c:v libvpx-vp9 ':''}-stream_loop -1 ${lp.ss>0?'-ss '+n3(lp.ss)+' ':''}-i ${q(lp.name)}`);
-    parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba,setpts=PTS-STARTPTS+${n3(lp.delay)}/TB[o${n}]`);
-    parts.push(`[${cur}][o${n}]overlay=0:0:eof_action=pass:shortest=1:format=auto[b${n}]`);cur='b'+n;
+    n++;inputs.push(`${/\.webm$/i.test(lp.name)?'-c:v libvpx-vp9 ':''}-stream_loop -1 -i ${q(lp.name)}`);
+    parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba${lp.ss>0?',trim=start='+n3(lp.ss):''},setpts=PTS-STARTPTS+${n3(lp.delay)}/TB[o${n}]`);
+    parts.push(`[${cur}][o${n}]overlay=0:0:eof_action=pass:format=auto[b${n}]`);cur='b'+n;
   }
   parts.push(`[${cur}]format=yuv420p[vo]`);
   return{inputs,graph:parts.join(';')};
