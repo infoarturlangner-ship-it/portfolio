@@ -176,6 +176,8 @@ Po udanym renderze `_seg` jest kasowany.
 
 Dodatkowo: eksport EDL do DaVinci Resolve oraz zapis/wczytanie projektu (markery i ustawienia).
 
+
+Po zakodowaniu każdy fragment jest sprawdzany (musi mieć klatki obrazu). Pusty albo uszkodzony fragment zatrzymuje skrypt z komunikatem „BŁĄD: fragment … jest pusty lub uszkodzony”, zamiast po cichu ucinać film. Po poprawce wystarczy uruchomić skrypt jeszcze raz (usunie uszkodzony fragment i zakoduje go od nowa).
 ## Uwagi
 
 - Render robi osobne krótkie pliki tymczasowe `_seg/` (usuwane na końcu), potem sklejenie — dzięki temu

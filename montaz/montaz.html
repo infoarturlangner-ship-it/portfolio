@@ -644,6 +644,8 @@ function loopFor(o,s){
   const delay=Math.max(0,at-s.start),ph=s.start>at?((s.start-at)%len):0;
   return{name:lo.name,delay,ss:ph>0.001?ph:0};
 }
+// kontrola świeżo zakodowanego fragmentu: musi mieć co najmniej jedną klatkę obrazu (pusty/uszkodzony plik zatrzymuje skrypt zamiast ucinać film)
+const chkLine=(T,file)=>`  ffmpeg -v error -i ${T}/${file}.tmp.mkv -map 0:v:0 -frames:v 1 -f framecrc - | grep -q '^0,' || { echo "BŁĄD: fragment ${file} jest pusty lub uszkodzony (zobacz komunikaty ffmpeg powyżej)"; rm -f ${T}/${file}.tmp.mkv; exit 1; }`;
 function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
   const ovs=(o.overlays||[]).filter(v=>v.name&&(v.film==='both'||+v.film===s.src));
   const fl=cut?flashFilter(o):'',base=fl?`${vf},${fl}`:vf;
@@ -731,8 +733,8 @@ function genScript(plan,o){
   const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 14M':'-c:v libx264 -crf 18 -preset medium';
   const useIntro=plan.some(p=>p.hasIntro),useOutro=plan.some(p=>p.hasOutro);
   const textName=o.textfx&&o.textfx.name?o.textfx.name:'';
-  const encBlocks=[],encSig=[];  // bloki kodowania z ochroną „jeśli jest, pomiń”; każdy blok to 4 linie
-  const guard=(file,cmd)=>{encBlocks.push(`if [ ! -f ${T}/${file} ]; then`,'  '+cmd,`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');encSig.push(cmd)};
+  const encBlocks=[],encSig=[];  // bloki kodowania z ochroną „jeśli jest, pomiń”; każdy blok to 5 linii
+  const guard=(file,cmd)=>{encBlocks.push(`if [ ! -f ${T}/${file} ]; then`,'  '+cmd,chkLine(T,file),`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');encSig.push(cmd)};
   const need=new Set();
   const introFn=useIntro?encIntroLines(vf,venc,o):null;
   if(useIntro){need.add(o.intro.f);if(introFn)need.add(o.introMusic.name);guard('intro.mkv',introFn?`enc_intro ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv`:`enc_extra ${q(o.intro.f)} ${T}/intro.mkv.tmp.mkv ${vol(o.introVol)}`)}
@@ -811,7 +813,7 @@ function genScript(plan,o){
       '  fi','}');
     if(introFn)L.push(...introFn);
   }
-  let idx=0;const take=n=>{const out=encBlocks.slice(idx,idx+n*4);idx+=n*4;return out};
+  let idx=0;const take=n=>{const out=encBlocks.slice(idx,idx+n*5);idx+=n*5;return out};
   if(useIntro)L.push(...take(1));
   if(useOutro)L.push(...take(1));
   plan.forEach((pt,k)=>{
@@ -944,7 +946,7 @@ function genMomentsScript(o){
   versions.forEach(v=>{v.out=`${base}_${v.tag}.mp4`;v.lay=momentsLayout(o,v.ms)});
   const used=moms.filter(m=>versions.some(v=>v.ms.includes(m)));
   const need=new Set(),blocks=[],sig=[];
-  const guard=(file,cmds,pre=[])=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,...pre.map(c=>'  '+c),...cmds.map(c=>'  '+c),`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(pre.concat(cmds).join('\n'))};
+  const guard=(file,cmds,pre=[])=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,...pre.map(c=>'  '+c),...cmds.map(c=>'  '+c),chkLine(T,file),`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(pre.concat(cmds).join('\n'))};
   const useIntro=!!(o.useIntro&&o.intro),useOutro=!!(o.useOutro&&o.outro);
   const overIntro=!!(o.music&&o.music.name&&useIntro&&o.musicOverIntro);   // muzyka z momentów gra od początku intro, dźwięk intro wyciszony
   const introFn=(useIntro&&!overIntro)?encIntroLines(vf,venc,o):null;
@@ -1184,7 +1186,7 @@ function genWeekScript(o){
   clips.forEach((c,ci)=>c.segs.forEach((s,j)=>{flat.push({...s,start:t,cut:!(ci===0&&j===0),first:j===0});t+=s.b-s.a}));
   const limit=+o.limit>0?+o.limit:0,use=limit?flat.filter(s=>s.start<limit):flat,tot=limit?Math.min(limit,total):total;
   const need=new Set(),blocks=[],sig=[],names=[];
-  const guard=(file,cmd)=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,'  '+cmd,`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(cmd)};
+  const guard=(file,cmd)=>{blocks.push(`if [ ! -f ${T}/${file} ]; then`,'  '+cmd,chkLine(T,file),`  mv ${T}/${file}.tmp.mkv ${T}/${file}`,'fi');sig.push(cmd)};
   const io=o.introOv&&o.introOv.name?o.introOv:null,iolen=io?(+io.len||8):0;
   use.forEach((s,i)=>{
     const name=`w${String(i).padStart(4,'0')}.mkv`,tx=io&&s.start<iolen?{file:io.name,offset:s.start}:null;
