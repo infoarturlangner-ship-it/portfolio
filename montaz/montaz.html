@@ -2340,7 +2340,8 @@ async function shPreview(si){
     if(!S.shpv)return;
     if(!S.playing){shEnd('Koniec podglądu.');return}
     const t=Math.max(0,v1.currentTime-S.shpv.a),cur=S.shpv.lines.find(l=>t>=l.st-0.05&&t<=l.en+0.25);
-    const vv=cur?base*0.35:base;v1.volume=v2.volume=Math.max(0,Math.min(1,vv));
+    const vv=S.shbufs.length?(cur?base*0.35:base):1;  // bez wczytanego nagrania lektora dźwięk z gry nie jest ściszany
+    v1.volume=v2.volume=Math.max(0,Math.min(1,vv));
     shDrawFrame();
     $('shpvinfo').textContent=`${fmt(t)} / ${fmt(S.shpv.D)}`+(cur?`\n🎙 ${cur.text}`:'')+(missing&&!S.shbufs.length?'\n(bez głosu: wczytaj nagranie lektora)':'');
     shRaf=requestAnimationFrame(tick);
