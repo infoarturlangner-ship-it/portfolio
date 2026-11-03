@@ -166,9 +166,23 @@ Pliki mają nazwy `nazwa_cz01.mp4`, `nazwa_cz02.mp4` itd. Efekty dźwiękowe lic
 Skrypt kasuje pliki tymczasowe po każdej części, więc nie potrzebuje miejsca na cały materiał naraz.
 EDL jest zawsze dla całego montażu (intro raz na początku, outro raz na końcu).
 
+### Shorty (pionowe 9:16, z komentarzem lektora)
+
+Zakładka „Shorty”. Powstaje osobny plik mp4 (1080×1920) na każdy short.
+
+1. **Instrukcja dla ChatGPT**: liczba shortów, długość (np. 20–50 s), maks. długość wstawki, wybór „najśmieszniejsze / najciekawsze / oba”. ChatGPT zwraca dla każdego shorta zakres „od–do”, tytuł i listę krótkich wstawek lektora z czasem „kiedy” (docinki w trakcie rozmowy, opcjonalnie puenta na końcu). Wstawek może być 0.
+2. **Lista shortów**: czasy, tytuły i teksty możesz poprawiać, dodawać i usuwać; „▶” podgląda fragment lub wstawkę. Przy każdym shorcie jest pole „outro”.
+3. **Tekst dla lektora**: jeden plik, każda wstawka to akapit, między akapitami `<break time="2.0s" />` (długość do ustawienia). Kolejność: shorty od góry, wstawki po kolei.
+4. **Nagranie lektora**: wczytujesz jeden plik z ElevenLabs (albo tyle plików, ile pobrałeś). Program wykrywa przerwy, wycina każdą kwestię i wstawia ją w klipie w czasie „kiedy”, bez nakładania na poprzednią wstawkę. Jeśli kwestia kończy się po końcu zakresu (puenta), klip jest wydłużony o jej długość (obraz płynie dalej).
+5. **Dźwięk**: głośność lektora, głośność dźwięku z gry (ściszany dodatkowo pod lektorem) i opcjonalna muzyka (też ustępuje lektorowi).
+6. **Kadr**: film 16:9 jest skalowany do szerokości kadru i stoi pośrodku na czarnym tle. Na wierzchu leży nakładka: PNG 1080×1920 albo wideo z alfą (zapętlone od początku każdego shorta).
+7. **Outro** (opcjonalne, doklejone na końcu, z własnym dźwiękiem): jego dźwięk wchodzi łagodnie w ostatnich sekundach shorta (ustawiana liczba sekund), a dźwięk shorta wtedy cichnie. Na początku shortów nie ma intra. Plik outro musi mieć ścieżkę dźwiękową.
+
+Cięcia kamer, dźwięki cięć i błysk działają jak w głównym montażu. Efekt alfa przy cięciu i nakładki na słowa nie są w shortach używane (są pod format 16:9). Wynik: `render_shorty.sh` (wznawianie, kontrola plików i fragmentów) oraz wersja testowa z pierwszym shortem.
+
 ### Zakładki
 
-Program jest podzielony na poziome zakładki (u góry, przypięte do góry strony): Pliki, Podgląd i markery, Słowa i cięcia, Grafiki i efekty (grafiki, efekt przy cięciu, nakładki wideo na słowa), Zajawka, Najlepsze momenty, W tym tygodniu, Eksport i skrypt. Przycisk „▶” przy scenach/momentach/zajawkach sam przełącza na zakładkę „Podgląd i markery”. Program pamięta ostatnią otwartą zakładkę.
+Program jest podzielony na poziome zakładki (u góry, przypięte do góry strony): Pliki, Podgląd i markery, Słowa i cięcia, Grafiki i efekty (grafiki, efekt przy cięciu, nakładki wideo na słowa), Zajawka, Najlepsze momenty, W tym tygodniu, Shorty, Eksport i skrypt. Przycisk „▶” przy scenach/momentach/zajawkach sam przełącza na zakładkę „Podgląd i markery”. Program pamięta ostatnią otwartą zakładkę.
 
 ### Wznawianie renderu
 `render.sh` na starcie sprawdza, czy wszystkie potrzebne pliki (filmy, intro, outro, dźwięki, grafiki) leżą w folderze. Jeśli czegoś brakuje,

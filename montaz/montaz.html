@@ -323,6 +323,66 @@ section.tabhide{display:none}
 <div class="row"><button id="wdlsh" class="pri">⬇ Pobierz render_tydzien.sh</button><button id="wdltest">⬇ test: pierwsze 25 s</button><span class="mut" id="wdlinfo"></span></div>
 </section>
 
+<section id="shortsec" data-tab="shorts">
+<h2>Shorty (pionowe 9:16, z komentarzem lektora)</h2>
+<div class="mut" style="margin-bottom:10px">Krótkie pionowe filmy z najśmieszniejszych/najciekawszych momentów. ChatGPT wybiera fragmenty i dopisuje krótkie wstawki lektora (w trakcie rozmowy i opcjonalnie puentę). Film 16:9 stoi pośrodku kadru 1080×1920 na czarnym tle, a na wierzchu leży Twoja nakładka (PNG albo zapętlone wideo z alfą). Opcjonalnie na końcu dochodzi outro z własnym dźwiękiem, który łagodnie wchodzi pod koniec shorta. Cięcia kamer, dźwięki cięć i błysk działają jak w głównym montażu (efekt alfa przy cięciu i nakładki na słowa nie są w shortach używane). Powstaje osobny plik mp4 na każdy short.</div>
+
+<b>1. Wybór fragmentów przez ChatGPT</b>
+<div class="row" style="margin:8px 0">
+ <label>liczba shortów</label><input type="number" id="shn" value="8" min="1" style="width:60px">
+ <label>długość od</label><input type="number" id="shmin" value="20" min="5" style="width:55px"><label>do</label><input type="number" id="shmax" value="50" min="5" style="width:55px"><label>s</label>
+ <label>wstawka do</label><input type="number" id="shmw" value="10" min="2" style="width:55px"><label>słów</label>
+ <label>wybierz</label><select id="shkind"><option value="mix">śmieszne i ciekawe</option><option value="funny">najśmieszniejsze</option><option value="interesting">najciekawsze</option></select>
+ <label>transkrypcja</label><select id="shsrc"><option value="1">film 1</option><option value="2">film 2</option><option value="3">oba (z oznaczeniem)</option></select>
+</div>
+<div class="row" style="margin-bottom:8px"><label>kontekst (opcjonalnie)</label><input type="text" id="shctx" placeholder="np. gra Fortnite, dwóch graczy, polski komentarz" style="width:min(520px,100%)"></div>
+<div class="row" style="margin-bottom:8px"><button id="shgen" class="pri">⬇ Pobierz instrukcję dla ChatGPT (shorty)</button><span class="mut" id="shgeninfo"></span></div>
+<div class="row"><label>odpowiedź ChatGPT (plik .json/.txt)</label><input type="file" id="shin"></div>
+<div class="row" style="margin-top:6px"><textarea id="shpaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON)" style="height:70px"></textarea></div>
+<div class="row" style="margin:6px 0 12px"><button id="shload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="shmsg"></span></div>
+
+<b>2. Shorty i wstawki lektora</b> <span class="mut">(czasy i teksty możesz poprawiać; „kiedy” = czas na osi montażu, w którym lektor zaczyna mówić)</span>
+<div id="shlist" style="margin:8px 0"></div>
+<div class="row" style="margin-bottom:12px"><button id="shadd">+ dodaj short</button><label><input type="checkbox" id="shoutall" checked> outro w każdym shorcie</label><span class="mut" id="shinfo"></span></div>
+
+<b>3. Tekst dla lektora (jeden plik do ElevenLabs)</b>
+<div class="row" style="margin:8px 0">
+ <label>przerwa między kwestiami (s)</label><input type="number" id="shbrk" value="2" min="1" max="3" step="0.5" style="width:60px">
+ <label>maks. znaków w pliku</label><input type="number" id="shmaxc" value="5000" min="500" step="500" style="width:75px">
+ <button id="shtxt" class="pri">⬇ Pobierz tekst dla lektora</button><span class="mut" id="shtxtinfo"></span>
+</div>
+<div class="mut" style="margin-bottom:12px">Każda wstawka to osobny akapit, między akapitami jest znacznik przerwy &lt;break time="2.0s" /&gt; (granica kwestii dla programu). Kolejność: shorty od góry, wstawki po kolei.</div>
+
+<b>4. Nagranie lektora</b>
+<div class="row" style="margin:8px 0"><label>plik audio z ElevenLabs</label><input type="file" id="shnar" accept="audio/*,.mp3,.wav,.m4a" multiple><span class="mut" id="shnari"></span></div>
+<div class="mut" style="margin-bottom:12px">Program wykrywa przerwy między kwestiami i wycina każdą w miejsce wskazane w „kiedy”. Wczytaj jeden plik (albo tyle plików, ile pobrałeś w kroku 3). Jeśli kwestia kończy się po końcu shorta, klip jest wydłużony.</div>
+
+<b>5. Dźwięk i muzyka</b>
+<div class="row" style="margin:8px 0">
+ <label>głośność lektora %</label><input type="number" id="shnvol" value="100" min="0" max="300" step="5" style="width:65px">
+ <label>dźwięk filmu pod lektorem %</label><input type="number" id="shfvol" value="60" min="0" max="300" step="5" style="width:65px">
+</div>
+<div class="row" style="margin-bottom:6px"><label>plik muzyki (opcjonalnie)</label><input type="file" id="shmus" accept="audio/*,.mp3,.wav,.m4a"><span class="mut" id="shmusi"></span></div>
+<div class="row" style="margin-bottom:12px">
+ <label>głośność muzyki %</label><input type="number" id="shmvol" value="30" min="0" max="300" step="5" style="width:65px">
+ <label>siła przyciszania</label><input type="range" id="shduck" min="0" max="100" value="70" style="width:110px"><span class="mono" id="shduckv">70</span>
+ <label>czułość</label><input type="range" id="shthr" min="0" max="100" value="50" style="width:110px"><span class="mono" id="shthrv">50</span>
+ <label>powrót (ms)</label><input type="number" id="shrel" value="500" min="50" step="50" style="width:70px">
+ <label>wejście/wyjście (s)</label><input type="number" id="shfin" value="0.5" min="0" step="0.5" style="width:55px"><input type="number" id="shfout" value="1" min="0" step="0.5" style="width:55px">
+</div>
+<div class="mut" style="margin-bottom:12px">Dźwięk z gry jest ściszony do ustawionej wartości i dodatkowo przyciszany, gdy mówi lektor. Muzyka też ustępuje lektorowi.</div>
+
+<b>6. Nakładka 9:16 i outro</b>
+<div class="row" style="margin:8px 0"><label>nakładka na wierzchu (PNG 1080×1920 albo wideo z alfą, zapętlone)</label><input type="file" id="shframe" accept="image/*,video/*,.mov,.webm,.png"><span class="mut" id="shframei"></span><label>długość pętli (s)</label><input type="number" id="shframelen" value="4" min="0.2" step="0.1" style="width:65px"></div>
+<div class="row" style="margin-bottom:8px"><label>outro 9:16 (z własnym dźwiękiem)</label><input type="file" id="shoutro" accept="video/*,.mov,.mp4,.webm"><span class="mut" id="shoutroi"></span>
+ <label>wejście dźwięku outro (s)</label><input type="number" id="shfade" value="1" min="0" step="0.5" style="width:60px"><label>głośność outro %</label><input type="number" id="shovol" value="100" min="0" max="300" step="5" style="width:65px"></div>
+<div class="mut" style="margin-bottom:12px">Outro jest doklejone na końcu (na początku shortów nie ma intra). Jego dźwięk wchodzi łagodnie w ostatnich sekundach shorta (ustawiona liczba sekund), a dźwięk shorta wtedy cichnie. W każdym shorcie możesz je odznaczyć. Plik outro musi mieć ścieżkę dźwiękową. Tam, gdzie nakładka jest przezroczysta, a film go nie zajmuje, jest czarne tło.</div>
+
+<b>7. Render</b>
+<div class="row" style="margin:8px 0"><label>początek nazwy plików</label><input type="text" id="shout" value="short" style="width:130px"></div>
+<div class="row"><button id="shdl" class="pri">⬇ Pobierz render_shorty.sh</button><button id="shtest">⬇ test: tylko pierwszy short</button><span class="mut" id="shdlinfo"></span></div>
+</section>
+
 <section data-tab="export">
 <h2>4. Eksport</h2>
 <div class="row" style="margin-bottom:8px">
@@ -658,8 +718,8 @@ function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
   const fl=cut?flashFilter(o):'',base=fl?`${vf},${fl}`:vf;
   const fx=cut&&o.fx&&o.fx.name?o.fx.name:'';
   const trig=trigFor(o,s);
-  const lp=loopFor(o,s);
-  if(!ovs.length&&!fx&&!textFile&&!trig.length&&!lp)return{inputs:[],vf:base};
+  const lp=loopFor(o,s),fi=o.frameImg&&o.frameImg.name?o.frameImg.name:'';
+  if(!ovs.length&&!fx&&!textFile&&!trig.length&&!lp&&!fi)return{inputs:[],vf:base};
   const inputs=[],parts=[`[0:v]${base}[b0]`];let n=0,cur='b0';
   ovs.forEach(v=>{
     n++;inputs.push('-i '+q(v.name));
@@ -684,6 +744,11 @@ function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
     n++;inputs.push(`${/\.webm$/i.test(lp.name)?'-c:v libvpx-vp9 ':''}-stream_loop -1 -i ${q(lp.name)}`);
     parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba${lp.ss>0?',trim=start='+n3(lp.ss):''},setpts=PTS-STARTPTS+${n3(lp.delay)}/TB[o${n}]`);
     parts.push(`[${cur}][o${n}]overlay=0:0:eof_action=pass:format=auto[b${n}]`);cur='b'+n;
+  }
+  if(fi){
+    n++;inputs.push(`-loop 1 -framerate ${o.fps||30} -i ${q(fi)}`);
+    parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba[o${n}]`);
+    parts.push(`[${cur}][o${n}]overlay=0:0:format=auto[b${n}]`);cur='b'+n;
   }
   parts.push(`[${cur}]format=yuv420p[vo]`);
   return{inputs,graph:parts.join(';')};
@@ -916,6 +981,7 @@ function segCommand(o,vf,venc,s,tmpOut,cut,tx){
   if(tx&&tx.file)need.push(tx.file);
   trigFor(o,s).forEach(x=>need.push(x.name));
   {const lp=loopFor(o,s);if(lp)need.push(lp.name)}
+  if(o.frameImg&&o.frameImg.name)need.push(o.frameImg.name);
   const cmd=sv.graph
     ?`ffmpeg -y -loglevel error ${inA} ${sv.inputs.join(' ')} -filter_complex "${sv.graph}" -map "[vo]" -map 0:a -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`
     :`ffmpeg -y -loglevel error ${inA} -vf "${sv.vf}" -af "${af}" ${venc} -c:a pcm_s16le -t ${n3(dur)} ${tmpOut}`;
@@ -1107,8 +1173,8 @@ function weekClips(o){
   });
 }
 // pliki tekstowe dla lektora (ElevenLabs): akapity rozdzielone przerwą, pakowane do limitu znaków na plik
-function buildNarrationFiles(texts,{maxChars=4500,breaks=true}={}){
-  const sep=breaks?'\n<break time="1.0s" />\n':'\n\n',files=[];let cur=[];
+function buildNarrationFiles(texts,{maxChars=4500,breaks=true,breakSec=1}={}){
+  const sep=breaks?`\n<break time="${(+breakSec||1).toFixed(1)}s" />\n`:'\n\n',files=[];let cur=[];
   const len=a=>a.join(sep).length;
   for(const t of texts){
     if(cur.length&&len([...cur,t])>maxChars){files.push(cur);cur=[]}
@@ -1119,8 +1185,12 @@ function buildNarrationFiles(texts,{maxChars=4500,breaks=true}={}){
 }
 // przerwy w nagraniu lektora -> długości k akapitów. env = RMS co hop s. Zwraca {durs,exact,gaps}
 function splitDurations(env,hop,dur,k,weights){
-  if(k<=1)return{durs:[dur],exact:true,gaps:[]};
   const sorted=[...env].sort((a,b)=>a-b),peak=sorted[Math.floor(sorted.length*0.95)]||0,thr=Math.max(0.004,peak*0.06);
+  let first=0,last=env.length;
+  while(first<env.length&&env[first]<thr)first++;
+  while(last>first&&env[last-1]<thr)last--;
+  const sp0=first*hop,sp1=Math.max(sp0,last*hop);
+  if(k<=1)return{durs:[dur],exact:true,gaps:[],spans:[{s:sp0,e:sp1}]};
   const runs=[];let st=-1;
   for(let i=0;i<=env.length;i++){
     const silent=i<env.length&&env[i]<thr;
@@ -1130,11 +1200,13 @@ function splitDurations(env,hop,dur,k,weights){
   if(runs.length>=k-1){
     const top=runs.sort((x,y)=>y.len-x.len).slice(0,k-1).sort((x,y)=>x.a-y.a),cuts=top.map(r=>(r.a+r.b)/2),durs=[];
     let prev=0;for(const c of cuts){durs.push(c-prev);prev=c}durs.push(dur-prev);
-    return{durs,exact:true,gaps:top.map(r=>+r.len.toFixed(2))};
+    const spans=[];for(let q=0;q<k;q++)spans.push({s:q===0?sp0:top[q-1].b,e:q===k-1?sp1:top[q].a});
+    return{durs,exact:true,gaps:top.map(r=>+r.len.toFixed(2)),spans};
   }
   // za mało przerw: dzielimy proporcjonalnie do liczby słów
-  const w=(weights&&weights.length===k)?weights:Array(k).fill(1),sum=w.reduce((a,b)=>a+b,0);
-  return{durs:w.map(x=>dur*x/sum),exact:false,gaps:runs.map(r=>+r.len.toFixed(2))};
+  const w=(weights&&weights.length===k)?weights:Array(k).fill(1),sum=w.reduce((a,b)=>a+b,0),durs=w.map(x=>dur*x/sum);
+  let c=0;const spans=durs.map(d=>{const o={s:c,e:c+d};c+=d;return o});
+  return{durs,exact:false,gaps:runs.map(r=>+r.len.toFixed(2)),spans};
 }
 // instrukcja dla ChatGPT: skrót materiału + narracja
 function buildWeekPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,targetMin=4,cmin=8,cmax=25,ctx='',greetPrompt='',audience=''}){
@@ -1246,6 +1318,139 @@ function genWeekScript(o){
     `ffmpeg -y -loglevel error -f concat -safe 0 -i ${T}/list.txt -c copy ${T}_all.mkv`,
     mixCmd,`rm -f ${T}_all.mkv`,`rm -rf ${T}`,`echo "Gotowe: ${out.replace(/["$`\\]/g,'')}"`];
   return{script:L.join('\n'),clips,total,flatCount:flat.length};
+}
+// ============ Shorty (9:16): krótkie klipy z komentarzem lektora ============
+// instrukcja dla ChatGPT: wybór klipów + krótkie wstawki lektora w trakcie i puenta
+function buildShortsPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,n=8,minS=20,maxS=50,kind='mix',maxWords=10,ctx=''}){
+  const both=src==='3',lines=[];
+  if(src!=='2')lines1.forEach(l=>lines.push({t:l.t0,text:l.text,tag:'F1'}));
+  if(src!=='1')lines2.forEach(l=>lines.push({t:l.t0-offset,text:l.text,tag:'F2'}));
+  lines.sort((a,b)=>a.t-b.t);
+  const what=kind==='funny'?'NAJŚMIESZNIEJSZE':kind==='interesting'?'NAJCIEKAWSZE':'NAJŚMIESZNIEJSZE i NAJCIEKAWSZE';
+  const L=['# Zadanie: shorty z krótkim komentarzem lektora','',
+   `Jesteś montażystą krótkich filmów (YouTube Shorts). Poniżej jest transkrypcja materiału z gry (rozmowa dwóch osób). Wybierz ${n} fragmentów, które są ${what} i nadają się na samodzielny short (pionowy film ${minS}–${maxS} s). Do niektórych miejsc dopisz krótkie wstawki lektora: docinki, krótkie uzupełnienia rozmowy albo puentę na końcu.`,''];
+  if(ctx.trim())L.push('Kontekst: '+ctx.trim(),'');
+  L.push('## Zasady wyboru',
+   `- Dokładnie ${n} fragmentów (lub mniej, jeśli nie ma tylu naprawdę dobrych). Każdy ciągły, o długości ${minS}–${maxS} sekund.`,
+   '- Fragment ma być zrozumiały sam w sobie: zaczyna się na początku wymiany zdań/akcji, kończy zaraz po puencie lub zakończeniu wątku. Granice dopasuj do granic linii transkrypcji. Czasy są przybliżone (±1–2 s), więc zostaw margines.',
+   '- Fragmenty nie mogą się nakładać. Nadaj każdemu krótki tytuł (3–8 słów), który posłuży za nazwę pliku.','',
+   '## Zasady wstawek lektora',
+   `- Wstawki to bardzo krótkie kwestie (3–${maxWords} słów) wypowiadane przez lektora w przerwach rozmowy, po skończonym zdaniu. Nie nakładają się na mówiące osoby.`,
+   '- Każda wstawka ma pole "kiedy": czas na osi montażu (g:mm:ss), w którym lektor zaczyna mówić. To ma być moment tuż po zakończeniu zdania w transkrypcji. Wstawka nie może być w pierwszej sekundzie fragmentu. Między wstawkami zostaw co najmniej 4 s.',
+   '- Puenta na końcu jest opcjonalna. Jeśli ją dodajesz, "kiedy" może być do ok. 3 s PO czasie "do" (klip zostanie wydłużony).',
+   '- Wstawek może być od 0 do 5 na fragment. Lepiej mniej i trafniej: gdy nie masz naprawdę dobrego komentarza, zostaw pustą listę.',
+   '- Styl: po polsku, sucho, z humorem, jak ktoś, kto komentuje z boku. Odnoś się do konkretnych słów i sytuacji z rozmowy. NIE opisuj tego, co widać na ekranie, NIE powtarzaj tego, co właśnie padło, bez wstępów typu „jak widać” czy „tymczasem”, bez klisz i morałów, bez emoji i nawiasów. Tekst ma brzmieć naturalnie czytany na głos.','',
+   '## Format odpowiedzi',
+   'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), w tej strukturze. Czasy jako tekst „g:mm:ss”:','',
+   '```json','{','  "shorty": [',
+   '    {','      "od": "0:12:03",','      "do": "0:12:41",','      "tytul": "Kto tu strzelał",','      "wstawki": [',
+   '        { "kiedy": "0:12:19", "tekst": "Zaczyna się dobrze." },',
+   '        { "kiedy": "0:12:43", "tekst": "I tak właśnie kończą bohaterowie." }','      ]','    }','  ]','}','```','',
+   '## Transkrypcja','',
+   'Format linii: [g:mm:ss] tekst'+(both?' (F1 / F2 = źródło: film 1 lub film 2, obie rozmowy są z tego samego czasu)':'')+'. Czasy dotyczą osi czasu montażu (taka sama jak w odpowiedzi).','');
+  lines.filter(l=>l.t>=inT&&l.t<outT).forEach(l=>L.push(`[${fmtHMS(l.t)}] ${both?l.tag+': ':''}${l.text}`));
+  return L.join('\n');
+}
+function parseShortsJson(text){
+  const m=String(text).match(/\{[\s\S]*\}/);if(!m)throw new Error('nie znalazłem JSON-a');
+  const j=JSON.parse(m[0]);
+  const tm=v=>v==null?'':(typeof v==='number'?fmtHMS(v):String(v).trim());
+  const list=j.shorty||j.shorts||j.klipy||j.clips||[];
+  const out=list.map(x=>({a:tm(x.od??x.from??x.start),b:tm(x['do']??x.to??x.end),title:String(x.tytul??x['tytuł']??x.title??'').trim(),
+    lines:(x.wstawki||x.lines||x.komentarze||[]).map(l=>({t:tm(l.kiedy??l.t??l.czas??l.at),text:String(l.tekst??l.text??'').trim()})).filter(l=>l.t&&l.text)})).filter(x=>x.a&&x.b);
+  if(!out.length)throw new Error('JSON nie zawiera shortów (od/do)');
+  return out;
+}
+// plan: pozycje wstawek w klipie, długość klipu (przedłużona, gdy puenta wypada po „do”)
+function shortsPlan(o){
+  const gapMin=0.35,tail=0.7;
+  return (o.shorts||[]).map(sh=>{
+    let prevEnd=0;const lines=[];
+    (sh.lines||[]).forEach(l=>{
+      const dur=Math.max(0.3,+l.dur||0);let st=Math.max(0.2,(+l.t)-sh.a);
+      if(lines.length&&st<prevEnd+gapMin)st=prevEnd+gapMin;
+      lines.push({...l,st,dur,en:st+dur});prevEnd=st+dur;
+    });
+    const base=sh.b-sh.a,D=Math.max(base,lines.length?prevEnd+tail:0);
+    return{...sh,lines,D,base,segs:fitClip(o.segs,sh.a,D,o.startSrc||1)};
+  });
+}
+function genShortsScript(o){
+  const T=o.tmp||'_segshort',Wv=1080,Hv=1920,fps=o.fps,vol=pctVol;
+  const vf=`scale=${Wv}:${Hv}:force_original_aspect_ratio=decrease,pad=${Wv}:${Hv}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`;
+  const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 12M':'-c:v libx264 -crf 18 -preset medium';
+  const fr=o.frame&&o.frame.name?o.frame:null,isImg=fr&&/\.(png|jpe?g|webp)$/i.test(fr.name);
+  const o2={...o,W:Wv,H:Hv,overlays:[],fx:null,textfx:null,trigOv:[],loopOv:fr&&!isImg?{name:fr.name,at:0,len:+fr.len||4}:null,frameImg:isImg?{name:fr.name}:null};
+  const plan=shortsPlan(o),need=new Set(),sig=[],blocks=[],fmtA='aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo';
+  const ou=o.outro&&o.outro.name?o.outro:null,od=ou?(+ou.dur||5):0,ov=ou?Math.min(Math.max(0,+ou.fade||1),od):0;
+  const mu=o.music&&o.music.name?o.music:null,nar=o.narr||[];
+  nar.forEach(n=>need.add(n.name));if(mu)need.add(mu.name);if(ou)need.add(ou.name);
+  const thr=n3(Math.max(0.001,Math.min(1,0.2*Math.pow(0.05,(+o.duck.thr||0)/100)))),ratio=n3(1+19*Math.max(0,Math.min(100,+o.duck.strength||0))/100);
+  const sc=`threshold=${thr}:ratio=${ratio}:attack=${Math.round(+o.duck.attack||40)}:release=${Math.round(+o.duck.release||600)}:makeup=1`;
+  if(ou){const c=`ffmpeg -y -loglevel error -i ${q(ou.name)} -vf "${vf}" -af "${fmtA}" ${venc} -c:a pcm_s16le -f matroska ${T}/outro.mkv.tmp.mkv`;
+    blocks.push(`if [ ! -f ${T}/outro.mkv ]; then`,'  '+c,chkLine(T,'outro.mkv'),`  mv ${T}/outro.mkv.tmp.mkv ${T}/outro.mkv`,'fi');sig.push(c)}
+  const outs=[];
+  plan.forEach((sh,k)=>{
+    const kk=String(k+1).padStart(2,'0'),withOut=!!ou&&sh.outro!==false,name=`${o.out||'short'}_${kk}${sh.title?' '+safeName(sh.title):''}.mp4`;
+    outs.push(name);
+    const pcs=[];let t=0;sh.segs.forEach(s=>{pcs.push({...s,start:t});t+=s.b-s.a});
+    const L=[`if [ ! -f ${T}/done_${kk} ]; then`],gsig=[];
+    const guard=(file,cmd)=>{L.push(`  if [ ! -f ${T}/${file} ]; then`,'    '+cmd,'  '+chkLine(T,file),`    mv ${T}/${file}.tmp.mkv ${T}/${file}`,'  fi');gsig.push(cmd)};
+    const names=[];
+    pcs.forEach((s,i)=>{
+      const f=`s${kk}_${String(i).padStart(4,'0')}.mkv`,sc2=segCommand(o2,vf,venc,s,`${T}/${f}.tmp.mkv`,i>0,null);
+      sc2.need.forEach(x=>need.add(x));guard(f,sc2.cmd);names.push(f);
+    });
+    L.push(`  printf "file '%s'\\n" ${names.join(' ')} > ${T}/list_${kk}.txt`,
+      `  ffmpeg -y -loglevel error -f concat -safe 0 -i ${T}/list_${kk}.txt -c copy ${T}/s${kk}_all.mkv`);
+    let vsrc=`${T}/s${kk}_all.mkv`;
+    if(withOut){
+      L.push(`  printf "file '%s'\\nfile '%s'\\n" s${kk}_all.mkv outro.mkv > ${T}/listv_${kk}.txt`,
+        `  ffmpeg -y -loglevel error -f concat -safe 0 -i ${T}/listv_${kk}.txt -map 0:v -c copy ${T}/s${kk}_v.mkv`);
+      vsrc=`${T}/s${kk}_v.mkv`;
+    }
+    // miks dźwięku
+    const D=sh.D,total=D+(withOut?od:0),inp=[`-i ${q(vsrc)}`,`-i ${q(`${T}/s${kk}_all.mkv`)}`],g=[`[1:a]${fmtA},asetpts=N/SR/TB[b0]`];
+    let film='[b0]';
+    const events=sfxEvents(sh.segs,o.rules||[],0,o.defSfx);
+    if(events.length){const sf=sfxFilter(events,'[b0]',inp.length);sf.files.forEach(f=>{need.add(f);inp.push('-i '+q(f))});g.push(sf.graph.replace(/\[a\]$/,'[film0]'));film='[film0]'}
+    const ln=[];
+    sh.lines.forEach((l,m)=>{
+      const f=nar[l.f||0];if(!f)return;const idx=inp.length;
+      inp.push(`-ss ${n3(Math.max(0,l.s))} -t ${n3(l.dur+0.15)} -i ${q(f.name)}`);
+      g.push(`[${idx}:a]${fmtA},volume=${vol(o.narVol)},adelay=${Math.round(l.st*1000)}:all=1,asetpts=N/SR/TB[l${m}]`);ln.push(`[l${m}]`);
+    });
+    if(!ln.length)g.push(`anullsrc=r=48000:cl=stereo,atrim=0:${n3(D)},asetpts=N/SR/TB[nar0]`);
+    else if(ln.length===1)g.push(`${ln[0]}anull[nar0]`);
+    else g.push(`${ln.join('')}amix=inputs=${ln.length}:duration=longest:normalize=0,asetpts=N/SR/TB[nar0]`);
+    g.push(`[nar0]apad=whole_dur=${n3(D)},atrim=0:${n3(D)},asetpts=N/SR/TB[nar]`);
+    const mixLab=withOut?'[a0]':'[a]';
+    if(mu){
+      const mi=inp.length;inp.push(`-stream_loop -1 -i ${q(mu.name)}`);
+      const fi=Math.min(+mu.fadeIn||0,D/2),fo=Math.min(+mu.fadeOut||0,D/2);
+      g.push(`[nar]asplit=3[n1][n2][n3]`,`${film}volume=${vol(o.filmVol)}[f1]`,`[f1][n1]sidechaincompress=${sc}[fd]`,
+        `[${mi}:a]${fmtA},atrim=0:${n3(D)},asetpts=N/SR/TB,volume=${vol(mu.vol)},afade=t=in:st=0:d=${n3(fi)},afade=t=out:st=${n3(Math.max(0,D-fo))}:d=${n3(fo)},apad=whole_dur=${n3(D)}[mus]`,
+        `[mus][n2]sidechaincompress=${sc}[md]`,`[n3][fd][md]amix=inputs=3:duration=first:normalize=0,asetpts=N/SR/TB${mixLab}`);
+    }else g.push(`[nar]asplit=2[n1][n3]`,`${film}volume=${vol(o.filmVol)}[f1]`,`[f1][n1]sidechaincompress=${sc}[fd]`,`[n3][fd]amix=inputs=2:duration=first:normalize=0,asetpts=N/SR/TB${mixLab}`);
+    if(withOut){
+      const oi=inp.length;inp.push(`-i ${q(`${T}/outro.mkv`)}`);
+      g.push(`[a0]afade=t=out:st=${n3(Math.max(0,D-ov))}:d=${n3(ov)}[as]`,
+        `[${oi}:a]${fmtA},volume=${vol(o.outroVol)},afade=t=in:st=0:d=${n3(ov)},adelay=${Math.round(Math.max(0,D-ov)*1000)}:all=1,asetpts=N/SR/TB[ao]`,
+        `[as][ao]amix=inputs=2:duration=longest:normalize=0,asetpts=N/SR/TB[a]`);
+    }
+    const mixCmd=`ffmpeg -y -loglevel error ${inp.join(' ')} -filter_complex "${g.join(';')}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -t ${n3(total)} ${q(name)}`;
+    gsig.push(mixCmd);sig.push(gsig.join('\n'));
+    L.push('  '+mixCmd,`  echo "ok" > ${T}/done_${kk}`,`  rm -f ${T}/s${kk}_*.mkv ${T}/list_${kk}.txt ${T}/listv_${kk}.txt`,'fi');
+    blocks.push(...L);
+  });
+  const sigAll=hash32(vf+venc+sig.join('\n'));
+  const out=['#!/bin/bash','set -e','# 1) kontrola plików','missing=0',
+    `for f in ${[...need].map(q).join(' ')}; do`,'  if [ ! -f "$f" ]; then echo "BRAK PLIKU: $f"; missing=1; fi','done',
+    'if [ $missing -ne 0 ]; then echo "Uzupełnij brakujące pliki w tym folderze i uruchom skrypt ponownie."; exit 1; fi',
+    '# 2) wznawianie',`SIG="${sigAll}"`,
+    `if [ "$(cat ${T}/.sig 2>/dev/null)" != "$SIG" ]; then rm -rf ${T}; mkdir -p ${T}; echo "$SIG" > ${T}/.sig; fi`,
+    ...blocks,`rm -rf ${T}`,`echo "Gotowe: ${plan.length} shortów"`];
+  return{script:out.join('\n'),plan,outs};
 }
 function genEDL(segs,o){
   const fr=Math.round(o.fps);const tc=t=>{let f=Math.round(t*fr);const F=f%fr;f=(f-F)/fr;return [Math.floor(f/3600),Math.floor(f/60)%60,f%60,F].map(x=>String(x).padStart(2,'0')).join(':')};
@@ -1497,7 +1702,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1510,6 +1715,7 @@ $('load').onchange=async e=>{
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
   S.vtr=(p.vtr||[]).map(r=>({q:r.q||'',qsrc:r.qsrc||'1',name:r.name||'',len:+r.len||5,nofile:!!r.name}));renderVtr();
+  if(p.sh){S.shorts=(p.sh.shorts||[]).map(s=>({a:s.a||'',b:s.b||'',title:s.title||'',outro:s.outro!==false,lines:(s.lines||[]).map(l=>({t:l.t||'',text:l.text||''}))}));S.shmus=p.sh.mus||'';S.shframe=p.sh.frame||'';S.shoutro=p.sh.outro||'';S.shspans=[];S.shfiles=[];for(const [k,v] of Object.entries(p.sh.set||{})){if($(k))$(k).value=v}for(const id of['shduck','shthr'])$(id+'v').textContent=$(id).value;renderShorts()}
   if(p.wk){S.week=p.wk.week||{greet:null,items:[]};S.wmus=p.wk.mus||'';S.wintro=p.wk.intro||'';S.wpsfx=p.wk.psfx||'';S.wloop=p.wk.loop||'';S.wdurs=[];S.wfiles=[];for(const [k,v] of Object.entries(p.wk.set||{})){if($(k)){if($(k).type==='checkbox')$(k).checked=!!v;else $(k).value=v}}for(const id of['wduck','wthr'])$(id+'v').textContent=$(id).value;renderWeek()}
   if(p.tol!=null)$('tol').value=p.tol;
   for(const [k,id] of [['introVol','introvol'],['outroVol','outrovol'],['ovTz','ovtz'],['gmin','gmin'],['gmax','gmax'],['gsrc','gsrc'],['gctx','gctx']])if(p[k]!=null)$(id).value=p[k];
@@ -1916,8 +2122,133 @@ $('wdlsh').onclick=()=>{try{const r=genWeekScript(weekOpts(0));dl('render_tydzie
 $('wdltest').onclick=()=>{try{const o=weekOpts(25);o.tmp='_segweektest';o.out=o.out.replace(/\.mp4$/,'_test.mp4');dl('render_tydzien_test.sh',genWeekScript(o).script)}catch(e){alert(e.message)}};
 renderWeek();
 
+// ============ Shorty ============
+S.shorts=[];S.shspans=[];S.shfiles=[];S.shmus='';S.shframe='';S.shoutro='';
+const shFlat=()=>{const a=[];S.shorts.forEach((sh,si)=>sh.lines.forEach((l,li)=>a.push({sh,si,l,li})));return a};
+const shLineDur=(l,k)=>{const sp=S.shspans[k];if(l.dur>0)return l.dur;if(sp)return sp.e-sp.s;return wWords(l.text)/2.3};
+function renderShorts(){
+  const box=$('shlist');box.innerHTML='';let k0=0;
+  S.shorts.forEach((sh,si)=>{
+    const card=document.createElement('div');card.className='mk';card.style.cssText='border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px';
+    card.innerHTML=`<div class="row"><b>#${si+1}</b><label>od</label><input type="text" class="a" style="width:88px"><label>do</label><input type="text" class="b" style="width:88px"><span class="mono ml">—</span>
+      <label>tytuł (nazwa pliku)</label><input type="text" class="t" style="width:min(260px,40vw)"><label><input type="checkbox" class="o"> outro</label><button class="p">▶</button><button class="x">✕</button></div>
+      <table class="lt" style="margin-top:6px"></table><div class="row" style="margin-top:4px"><button class="al">+ wstawka</button></div>`;
+    const a=card.querySelector('.a'),b=card.querySelector('.b'),t=card.querySelector('.t'),o=card.querySelector('.o'),ml=card.querySelector('.ml');
+    a.value=sh.a;b.value=sh.b;t.value=sh.title||'';o.checked=sh.outro!==false;
+    const upd=()=>{const d=parseTime(b.value)-parseTime(a.value);ml.textContent=d>0?fmt(d):'—'};upd();
+    a.oninput=()=>{sh.a=a.value;upd();shInfo()};b.oninput=()=>{sh.b=b.value;upd();shInfo()};t.oninput=()=>{sh.title=t.value};
+    o.onchange=()=>{sh.outro=o.checked};
+    card.querySelector('.p').onclick=()=>previewRange(parseTime(sh.a),parseTime(sh.b),false);
+    card.querySelector('.x').onclick=()=>{S.shorts.splice(si,1);S.shspans=[];renderShorts()};
+    const lt=card.querySelector('.lt');
+    sh.lines.forEach((l,li)=>{
+      const k=k0+li,tr=document.createElement('tr');
+      tr.innerHTML=`<td>kiedy</td><td><input type="text" class="lw" style="width:88px"></td><td><input type="text" class="lx" style="width:min(460px,50vw)"></td><td class="mono ld"></td><td><button class="lp" title="odtwórz od 3 s przed wstawką">▶</button></td><td><button class="lr">✕</button></td>`;
+      const lw=tr.querySelector('.lw'),lx=tr.querySelector('.lx');lw.value=l.t;lx.value=l.text;
+      const ld=()=>{tr.querySelector('.ld').textContent=shLineDur(l,k).toFixed(1)+' s'};ld();
+      lw.oninput=()=>{l.t=lw.value;shInfo()};lx.oninput=()=>{l.text=lx.value;S.shspans=[];ld();shInfo()};
+      tr.querySelector('.lp').onclick=()=>{const tt=parseTime(l.t);previewRange(Math.max(0,tt-3),tt+Math.max(2,shLineDur(l,k)),false)};
+      tr.querySelector('.lr').onclick=()=>{sh.lines.splice(li,1);S.shspans=[];renderShorts()};
+      lt.appendChild(tr);
+    });
+    card.querySelector('.al').onclick=()=>{sh.lines.push({t:sh.b||'',text:''});S.shspans=[];renderShorts()};
+    k0+=sh.lines.length;box.appendChild(card);
+  });
+  shInfo();
+}
+function shInfo(){
+  const el=$('shinfo');if(!el)return;
+  const n=S.shorts.length,ln=shFlat().length;
+  el.textContent=n?` ${n} shortów, ${ln} wstawek`:' brak shortów';
+}
+function loadShortsText(txt){
+  try{
+    const l=parseShortsJson(txt);
+    S.shorts=l.map(x=>({a:x.a,b:x.b,title:x.title,outro:$('shoutall').checked,lines:x.lines}));S.shspans=[];renderShorts();
+    $('shmsg').textContent=` Wczytano shortów: ${S.shorts.length}, wstawek: ${shFlat().length}.`;
+  }catch(e){$('shmsg').textContent=' Nie udało się wczytać: '+e.message}
+}
+$('shin').onchange=async e=>{const f=e.target.files[0];if(f)loadShortsText(await f.text())};
+$('shload').onclick=()=>loadShortsText($('shpaste').value);
+$('shadd').onclick=()=>{S.shorts.push({a:'',b:'',title:'',outro:$('shoutall').checked,lines:[]});renderShorts()};
+$('shoutall').onchange=()=>{S.shorts.forEach(s=>{s.outro=$('shoutall').checked});renderShorts()};
+$('shgen').onclick=()=>{
+  if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
+  const src=$('shsrc').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
+  if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
+  const txt=buildShortsPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),n:num($('shn').value,8),minS:num($('shmin').value,20),maxS:num($('shmax').value,50),kind:$('shkind').value,maxWords:num($('shmw').value,10),ctx:$('shctx').value});
+  dl('instrukcja_chatgpt_shorty.txt',txt);
+  $('shgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
+};
+const shNarFiles=()=>buildNarrationFiles(shFlat().map(x=>x.l.text.trim()).filter(Boolean),{maxChars:num($('shmaxc').value,5000),breaks:true,breakSec:num($('shbrk').value,2)});
+$('shtxt').onclick=()=>{
+  if(!shFlat().length){alert('Brak wstawek lektora. Wczytaj odpowiedź ChatGPT lub dodaj wstawki.');return}
+  const fs=shNarFiles();
+  fs.forEach((f,i)=>dl(fs.length>1?`lektor_shorty_${String(i+1).padStart(2,'0')}.txt`:'lektor_shorty.txt',f.text));
+  $('shtxtinfo').textContent=` ${fs.length} ${fs.length===1?'plik':'plików'} (wstawek: ${fs.map(f=>f.count).join(', ')})`;
+};
+$('shnar').onchange=async e=>{
+  const fl=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  S.shfiles=[];S.shspans=[];
+  if(!fl.length){$('shnari').textContent='';renderShorts();return}
+  $('shnari').textContent=' analizuję…';
+  try{
+    const flat=shFlat(),words=flat.map(x=>wWords(x.l.text)),gen=shNarFiles(),ens=[];
+    for(const f of fl)ens.push(await envOf(f));
+    if(fl.length!==1&&fl.length!==gen.length)throw new Error(`wczytano ${fl.length} plików, a tekst ma ${gen.length}: wczytaj 1 plik albo ${gen.length}`);
+    const spans=[],msg=[];
+    const clampSp=(s,x)=>({s:Math.max(0,s.s-0.05),e:Math.min(x.dur,s.e+0.1)});
+    if(fl.length===1){
+      const r=splitDurations(ens[0].env,ens[0].hop,ens[0].dur,flat.length,words);
+      r.spans.forEach(s=>spans.push({f:0,...clampSp(s,ens[0])}));
+      if(!r.exact)msg.push('za mało wykrytych przerw: podział wg liczby słów, sprawdź czasy');
+      else if(flat.length>1)msg.push(`wykryte przerwy: ${r.gaps.join(', ')} s`);
+    }else{
+      let k0=0;
+      ens.forEach((x,i)=>{const c=gen[i].count,r=splitDurations(x.env,x.hop,x.dur,c,words.slice(k0,k0+c));r.spans.forEach(s=>spans.push({f:i,...clampSp(s,x)}));k0+=c;if(!r.exact)msg.push(`plik ${i+1}: za mało przerw`)});
+    }
+    S.shfiles=fl.map((f,i)=>({name:f.name,dur:ens[i].dur}));S.shspans=spans;
+    $('shnari').textContent=` ${fl.map(f=>f.name).join(', ')} · ${fmt(S.shfiles.reduce((a,f)=>a+f.dur,0))}`+(msg.length?' · '+msg.join('; '):' · przerwy wykryte');
+  }catch(err){$('shnari').textContent=' Nie udało się: '+err.message}
+  renderShorts();
+};
+$('shmus').onchange=e=>{const f=e.target.files[0];S.shmus=f?f.name:'';$('shmusi').textContent=f?' '+f.name:''};
+const shMeta=(f,cb)=>{const v=document.createElement('video');v.preload='metadata';v.onloadedmetadata=()=>{cb(isFinite(v.duration)?v.duration:0);URL.revokeObjectURL(v.src)};v.onerror=()=>cb(0);v.src=URL.createObjectURL(f)};
+$('shframe').onchange=e=>{
+  const f=e.target.files[0];S.shframe=f?f.name:'';$('shframei').textContent=f?' '+f.name:'';
+  if(f&&!/\.(png|jpe?g|webp)$/i.test(f.name))shMeta(f,d=>{if(d>0){$('shframelen').value=Math.round(d*100)/100;$('shframei').textContent=` ${f.name} · pętla ${fmt(d)}`}});
+};
+$('shoutro').onchange=e=>{
+  const f=e.target.files[0];S.shoutro=f?f.name:'';S.shoutroLen=5;$('shoutroi').textContent=f?' '+f.name:'';
+  if(f)shMeta(f,d=>{S.shoutroLen=d||5;$('shoutroi').textContent=` ${f.name} · ${d?fmt(d):'długość nieznana (przyjmę 5 s)'}`});
+};
+for(const [id,vid] of [['shduck','shduckv'],['shthr','shthrv']])$(id).addEventListener('input',()=>{$(vid).textContent=$(id).value});
+function shortsOpts(onlyFirst){
+  if(!S.segs.length)throw new Error('Najpierw ustaw montaż (filmy, zakres „od–do”).');
+  const flat=shFlat(),needAudio=flat.length>0;
+  if(needAudio&&!S.shspans.length)throw new Error('Wczytaj nagranie lektora (krok 4).');
+  let k=0;const shorts=[];
+  S.shorts.forEach(sh=>{
+    const lines=sh.lines.map(l=>{const sp=S.shspans[k++];return sp?{t:parseTime(l.t),text:l.text,f:sp.f,s:sp.s,e:sp.e,dur:(l.dur>0?l.dur:sp.e-sp.s)}:null}).filter(Boolean);
+    const a=parseTime(sh.a),b=parseTime(sh.b);
+    if(b>a)shorts.push({a,b,title:sh.title,outro:sh.outro!==false,lines});
+  });
+  if(!shorts.length)throw new Error('Dodaj przynajmniej jeden short (poprawne „od” < „do”).');
+  const o=opts();
+  return{...o,segs:S.segs,startSrc:S.activeSrc||1,shorts:onlyFirst?shorts.slice(0,1):shorts,
+    narr:S.shfiles.map(f=>({name:f.name})),narVol:num($('shnvol').value,100),filmVol:num($('shfvol').value,60),outroVol:num($('shovol').value,100),
+    music:S.shmus?{name:S.shmus,vol:num($('shmvol').value,30),fadeIn:num($('shfin').value,0.5),fadeOut:num($('shfout').value,1)}:null,
+    duck:{thr:num($('shthr').value,50),strength:num($('shduck').value,70),attack:40,release:num($('shrel').value,500)},
+    outro:S.shoutro?{name:S.shoutro,dur:S.shoutroLen||5,fade:num($('shfade').value,1)}:null,
+    frame:S.shframe?{name:S.shframe,len:num($('shframelen').value,4)}:null,
+    out:$('shout').value||'short',tmp:'_segshort'};
+}
+$('shdl').onclick=()=>{try{const r=genShortsScript(shortsOpts(false));dl('render_shorty.sh',r.script);$('shdlinfo').textContent=` ${Math.round(r.script.length/1024)} KB · ${r.plan.length} shortów`}catch(e){alert(e.message)}};
+$('shtest').onclick=()=>{try{const o=shortsOpts(true);o.tmp='_segshorttest';o.out=(o.out||'short')+'_test';dl('render_shorty_test.sh',genShortsScript(o).script)}catch(e){alert(e.message)}};
+renderShorts();
+
 // ============ zakładki ============
-const TABS=[['files','Pliki'],['preview','Podgląd i markery'],['words','Słowa i cięcia'],['fx','Grafiki i efekty'],['teaser','Zajawka'],['moments','Najlepsze momenty'],['week','W tym tygodniu'],['export','Eksport i skrypt']];
+const TABS=[['files','Pliki'],['preview','Podgląd i markery'],['words','Słowa i cięcia'],['fx','Grafiki i efekty'],['teaser','Zajawka'],['moments','Najlepsze momenty'],['week','W tym tygodniu'],['shorts','Shorty'],['export','Eksport i skrypt']];
 function showTab(id){
   if(!TABS.some(t=>t[0]===id))id='files';
   document.querySelectorAll('section[data-tab]').forEach(s=>s.classList.toggle('tabhide',s.dataset.tab!==id));
