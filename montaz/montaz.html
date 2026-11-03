@@ -44,14 +44,21 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 #fxl{position:absolute;inset:0;pointer-events:none;z-index:2}
 #fxl video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:transparent}
 .ovrow{padding:6px;border:1px solid var(--line);border-radius:8px}
+.tabs-wrap{}
+#tabs{position:sticky;top:0;z-index:20;display:flex;gap:4px;overflow-x:auto;padding:8px 0;background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:thin}
+#tabs button{flex:0 0 auto;white-space:nowrap;border-radius:8px 8px 0 0;border-color:transparent;background:transparent;color:var(--mut);font-weight:600}
+#tabs button:hover{color:var(--txt);border-color:var(--line)}
+#tabs button.on{background:var(--panel);color:var(--txt);border-color:var(--line);border-bottom-color:var(--c1);box-shadow:inset 0 -2px 0 var(--c1)}
+section.tabhide{display:none}
 .rule{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
 </style>
 </head>
 <body>
 <main>
 <div class="row"><h1>Montaż na słowo</h1><span class="mut">dwa filmy → cięcia przy każdym wystąpieniu słowa → mp4</span></div>
+<nav id="tabs" role="tablist"></nav>
 
-<section>
+<section data-tab="files">
 <h2>1. Pliki</h2>
 <div class="grid2">
  <div class="mk">
@@ -69,7 +76,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 </div>
 </section>
 
-<section>
+<section data-tab="preview">
 <h2>2. Podgląd i markery</h2>
 <div class="row" style="margin-bottom:10px">
  <label><input type="radio" name="mode" value="cal" checked> Kalibracja (oba obok siebie)</label>
@@ -108,7 +115,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 </div>
 </section>
 
-<section>
+<section data-tab="words">
 <h2>3. Słowa i cięcia</h2>
 <div class="row" style="margin-bottom:6px"><b>Domyślny dźwięk cięcia</b>
  <input type="file" id="dsf" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" style="max-width:230px"><span class="mut" id="dsn"></span>
@@ -136,14 +143,14 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="hitbox" style="margin-top:10px"><table id="hits"></table></div>
 </section>
 
-<section>
+<section data-tab="fx">
 <h2>Grafiki (nakładki)</h2>
 <div class="mut" style="margin-bottom:8px">Obrazki z dysku (PNG z przezroczystością, JPG) widoczne przez cały czas, gdy dany film jest w kadrze. W trybie „Podgląd montażu" możesz je przeciągać myszą. Pliki muszą leżeć w folderze z filmami. Intro i outro nie dostają nakładek.</div>
 <div id="ovlist"></div>
 <div class="row"><button id="addov">+ dodaj grafikę</button></div>
 </section>
 
-<section>
+<section data-tab="fx">
 <h2>Efekt przy cięciu</h2>
 <div class="row" style="margin-bottom:8px">
  <label><input type="checkbox" id="flashon"> rozjaśnienie po każdym cięciu (płynny powrót do naturalnych kolorów)</label>
@@ -154,14 +161,14 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="mut" style="margin-top:6px">Zalecany format: <b>.mov ProRes 4444</b> z alfa (render działa na pewno). W podglądzie przeglądarka zagra go tylko, jeśli go obsługuje (Safari tak, Chrome zwykle nie); wtedy podgląd pokaże samo rozjaśnienie, a nakładka będzie dopiero w renderze. Plik na pełny kadr, w proporcjach rozmiaru wyjściowego. Plik musi leżeć w folderze z filmami.</div>
 </section>
 
-<section>
+<section data-tab="fx">
 <h2>Nakładki wideo na słowa (kanał alfa)</h2>
 <div class="mut" style="margin-bottom:8px">Film z przezroczystością (.mov/.webm), który gra na najwyższej warstwie, gdy padnie dane słowo. Zasłania obraz na całym kadrze (jak efekt przy cięciu), odtwarza się raz od początku i nie powtarza, dopóki trwa. Możesz dodać kilka takich nakładek. Dotyczy całego programu (montaż, zajawka, momenty, tydzień). Podgląd w przeglądarce ich nie pokazuje, widać je w renderze. Plik leży w folderze z filmami. Dźwięk nakładki nie jest używany.</div>
 <div id="vtrlist"></div>
 <div class="row"><button id="addvtr">+ dodaj nakładkę na słowo</button><span class="mut" id="vtrinfo"></span></div>
 </section>
 
-<section>
+<section data-tab="teaser">
 <h2>Zajawka „W dzisiejszym odcinku"</h2>
 <div class="mut" style="margin-bottom:8px">Dla każdej części osobno podajesz zakres montażu (czas filmu 1, np. <span class="mono">1:12:05</span>), który ma wejść na sam początek. To fragment gotowego montażu (z cięciami, grafikami i efektami), potem leci intro z pliku, a potem montaż. Zostaw puste, żeby nie było zajawki. Liczba części wynika z „podziel na części" w sekcji Eksport.</div>
 <div class="row" style="margin-bottom:8px"><label>wideo z alfa nałożone na zajawkę (np. napis „W dzisiejszym odcinku")</label><input type="file" id="txf" accept="video/*,.mov,.webm"><span class="mut" id="txi"></span></div>
@@ -182,7 +189,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row" style="margin-top:6px"><button id="gptload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="gptmsg"></span></div>
 </section>
 
-<section id="momsec">
+<section data-tab="moments" id="momsec">
 <h2>Najlepsze momenty (osobny film)</h2>
 <div class="mut" style="margin-bottom:10px">Film z najśmieszniejszych/najciekawszych scen głównego montażu: tytuł → plansza z tytułem przed każdym momentem → moment → … Momenty wybiera ChatGPT na podstawie transkrypcji. Cięcia kamer, grafiki, efekty i dźwięki w momentach są takie same jak w głównym montażu (ustawiasz je wyżej). Powstają dwie wersje: dłuższa i krótsza.</div>
 
@@ -252,7 +259,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row"><button id="mdlsh" class="pri">⬇ Pobierz render_momenty.sh</button><button id="mdltest">⬇ test: tytuł + 2 pierwsze momenty</button><span class="mut" id="mdlinfo"></span></div>
 </section>
 
-<section id="weeksec">
+<section data-tab="week" id="weeksec">
 <h2>„W tym tygodniu” (skrót z lektorem)</h2>
 <div class="mut" style="margin-bottom:10px">Krótki film-podsumowanie z narracją lektora. ChatGPT wybiera sceny z transkrypcji (zakres „od–do” montażu) i pisze do nich tekst. Tekst czytasz syntezatorem (np. ElevenLabs), wczytujesz nagranie tutaj, a program sam dopasowuje długość każdej sceny do długości jej akapitu (po przerwach między akapitami). Cięcia kamer, grafiki, efekt i dźwięk cięcia są takie same jak w głównym montażu.</div>
 
@@ -316,7 +323,7 @@ textarea{width:100%;height:220px;font:12px/1.4 ui-monospace,Menlo,monospace}
 <div class="row"><button id="wdlsh" class="pri">⬇ Pobierz render_tydzien.sh</button><button id="wdltest">⬇ test: pierwsze 25 s</button><span class="mut" id="wdlinfo"></span></div>
 </section>
 
-<section>
+<section data-tab="export">
 <h2>4. Eksport</h2>
 <div class="row" style="margin-bottom:8px">
  <label>rozdzielczość</label><input type="number" id="W" value="1920" style="width:70px">×<input type="number" id="H" value="1080" style="width:70px">
@@ -1333,6 +1340,7 @@ function cutFx(){
 // podgląd wycinka [a,b] montażu (zajawka) z napisem z alfa od początku
 function previewRange(a,b,withText){
   if(!(b>a)){alert('Ustaw zakres „od” < „do”.');return}
+  showTab('preview');
   if(S.mode!=='mon'){document.querySelector('[name=mode][value=mon]').checked=true;setMode('mon')}
   stopPlay();S.stopAt=b;seekTo(a);S.playing=true;$('play').textContent='❚❚ Pauza';
   if(withText&&S.txOK){const t=$('txv');t.style.display='block';t.currentTime=0;t.play().catch(()=>{});t.onended=()=>{t.style.display='none'}}
@@ -1907,6 +1915,23 @@ function weekOpts(limit){
 $('wdlsh').onclick=()=>{try{const r=genWeekScript(weekOpts(0));dl('render_tydzien.sh',r.script);$('wdlinfo').textContent=` ${Math.round(r.script.length/1024)} KB · film ok. ${fmt(r.total)}`}catch(e){alert(e.message)}};
 $('wdltest').onclick=()=>{try{const o=weekOpts(25);o.tmp='_segweektest';o.out=o.out.replace(/\.mp4$/,'_test.mp4');dl('render_tydzien_test.sh',genWeekScript(o).script)}catch(e){alert(e.message)}};
 renderWeek();
+
+// ============ zakładki ============
+const TABS=[['files','Pliki'],['preview','Podgląd i markery'],['words','Słowa i cięcia'],['fx','Grafiki i efekty'],['teaser','Zajawka'],['moments','Najlepsze momenty'],['week','W tym tygodniu'],['export','Eksport i skrypt']];
+function showTab(id){
+  if(!TABS.some(t=>t[0]===id))id='files';
+  document.querySelectorAll('section[data-tab]').forEach(s=>s.classList.toggle('tabhide',s.dataset.tab!==id));
+  document.querySelectorAll('#tabs button').forEach(b=>{const on=b.dataset.tab===id;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+  try{localStorage.setItem('montaz_tab',id)}catch(e){}
+  if(id==='preview'){try{updateOverlayView()}catch(e){}}
+  window.scrollTo(0,0);
+}
+(function(){
+  const nav=$('tabs');
+  TABS.forEach(([id,name])=>{const b=document.createElement('button');b.textContent=name;b.dataset.tab=id;b.setAttribute('role','tab');b.onclick=()=>showTab(id);nav.appendChild(b)});
+  let start='files';try{start=localStorage.getItem('montaz_tab')||'files'}catch(e){}
+  showTab(start);
+})();
 renderRules();renderMoms();setMode('cal');recompute();
 </script>
 </body>

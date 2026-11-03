@@ -166,6 +166,10 @@ Pliki mają nazwy `nazwa_cz01.mp4`, `nazwa_cz02.mp4` itd. Efekty dźwiękowe lic
 Skrypt kasuje pliki tymczasowe po każdej części, więc nie potrzebuje miejsca na cały materiał naraz.
 EDL jest zawsze dla całego montażu (intro raz na początku, outro raz na końcu).
 
+### Zakładki
+
+Program jest podzielony na poziome zakładki (u góry, przypięte do góry strony): Pliki, Podgląd i markery, Słowa i cięcia, Grafiki i efekty (grafiki, efekt przy cięciu, nakładki wideo na słowa), Zajawka, Najlepsze momenty, W tym tygodniu, Eksport i skrypt. Przycisk „▶” przy scenach/momentach/zajawkach sam przełącza na zakładkę „Podgląd i markery”. Program pamięta ostatnią otwartą zakładkę.
+
 ### Wznawianie renderu
 `render.sh` na starcie sprawdza, czy wszystkie potrzebne pliki (filmy, intro, outro, dźwięki, grafiki) leżą w folderze. Jeśli czegoś brakuje,
 wypisuje `BRAK PLIKU: …` i kończy od razu, zanim zacznie kodować.
