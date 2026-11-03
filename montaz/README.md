@@ -178,9 +178,11 @@ Zakładka „Shorty”. Powstaje osobny plik mp4 (1080×1920) na każdy short.
 6. **Kadr**: film 16:9 jest skalowany do szerokości kadru i stoi pośrodku na czarnym tle. Na wierzchu leży nakładka: PNG 1080×1920 albo wideo z alfą (zapętlone od początku każdego shorta).
 7. **Outro** (opcjonalne, doklejone na końcu, z własnym dźwiękiem): jego dźwięk wchodzi łagodnie w ostatnich sekundach shorta (ustawiana liczba sekund), a dźwięk shorta wtedy cichnie. Na początku shortów nie ma intra. Plik outro musi mieć ścieżkę dźwiękową.
 
-**Podgląd shorta** (w zakładce, przycisk „▶ short” przy każdym shorcie): pionowy ekran 9:16 z filmem na czarnym tle, Twoją nakładką, wstawkami lektora w ich momentach (z nagrania) i przyciszaniem dźwięku z gry pod lektorem. Podgląd nie zawiera outro, muzyki ani efektów z renderu, a nakładka w formacie .mov (ProRes) może się w przeglądarce nie odtworzyć (render ją użyje). Przycisk „▶ film” odtwarza surowy fragment poziomo w zakładce „Podgląd i markery”.
+**Podgląd shorta** (w zakładce, przycisk „▶ short” przy każdym shorcie): pionowy ekran 9:16 z filmem na czarnym tle, grafikami z głównego montażu, Twoją nakładką, wstawkami lektora w ich momentach (z nagrania) i przyciszaniem dźwięku z gry pod lektorem. Podgląd nie zawiera outro, muzyki, efektu alfa przy cięciu ani nakładek na słowa, a nakładka w formacie .mov (ProRes) może się w przeglądarce nie odtworzyć (render ją użyje). Przycisk „▶ film” odtwarza surowy fragment poziomo w zakładce „Podgląd i markery”.
 
-Cięcia kamer, dźwięki cięć i błysk działają jak w głównym montażu. Efekt alfa przy cięciu i nakładki na słowa nie są w shortach używane (są pod format 16:9). Wynik: `render_shorty.sh` (wznawianie, kontrola plików i fragmentów) oraz wersja testowa z pierwszym shortem.
+Wszystko z głównego montażu działa w shortach: cięcia kamer, dźwięki cięć, błysk, grafiki (nakładki), efekt alfa przy cięciu i nakładki wideo na słowa. Są nakładane na obszar filmu 16:9 (pozycje i rozmiary w % tak jak w głównym montażu), a Twoja nakładka 9:16 leży na całym kadrze, na wierzchu.
+
+**Lektor jest opcjonalny:** bez wczytanego nagrania render powstaje bez wstawek (dźwięk z gry 100%, długość shorta = „od–do”). Wynik: `render_shorty.sh` (wznawianie, kontrola plików i fragmentów) oraz wersja testowa z pierwszym shortem.
 
 ### Zakładki
 

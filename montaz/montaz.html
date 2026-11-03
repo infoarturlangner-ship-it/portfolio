@@ -325,7 +325,7 @@ section.tabhide{display:none}
 
 <section id="shortsec" data-tab="shorts">
 <h2>Shorty (pionowe 9:16, z komentarzem lektora)</h2>
-<div class="mut" style="margin-bottom:10px">Krótkie pionowe filmy z najśmieszniejszych/najciekawszych momentów. ChatGPT wybiera fragmenty i dopisuje krótkie wstawki lektora (w trakcie rozmowy i opcjonalnie puentę). Film 16:9 stoi pośrodku kadru 1080×1920 na czarnym tle, a na wierzchu leży Twoja nakładka (PNG albo zapętlone wideo z alfą). Opcjonalnie na końcu dochodzi outro z własnym dźwiękiem, który łagodnie wchodzi pod koniec shorta. Cięcia kamer, dźwięki cięć i błysk działają jak w głównym montażu (efekt alfa przy cięciu i nakładki na słowa nie są w shortach używane). Powstaje osobny plik mp4 na każdy short.</div>
+<div class="mut" style="margin-bottom:10px">Krótkie pionowe filmy z najśmieszniejszych/najciekawszych momentów. ChatGPT wybiera fragmenty i dopisuje krótkie wstawki lektora (w trakcie rozmowy i opcjonalnie puentę). Film 16:9 stoi pośrodku kadru 1080×1920 na czarnym tle, a na wierzchu leży Twoja nakładka (PNG albo zapętlone wideo z alfą). Opcjonalnie na końcu dochodzi outro z własnym dźwiękiem, który łagodnie wchodzi pod koniec shorta. Cięcia kamer, dźwięki cięć i błysk działają jak w głównym montażu Grafiki, efekt alfa przy cięciu i nakładki wideo na słowa z głównego montażu są nakładane na obszar filmu (tak jak w głównym montażu), a Twoja nakładka 9:16 leży na całym kadrze. Powstaje osobny plik mp4 na każdy short.</div>
 
 <b>1. Wybór fragmentów przez ChatGPT</b>
 <div class="row" style="margin:8px 0">
@@ -341,7 +341,7 @@ section.tabhide{display:none}
 <div class="row" style="margin-top:6px"><textarea id="shpaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON)" style="height:70px"></textarea></div>
 <div class="row" style="margin:6px 0 12px"><button id="shload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="shmsg"></span></div>
 
-<b>Podgląd shorta</b> <span class="mut">(kadr 9:16 z nakładką, wstawki lektora i przyciszanie dźwięku z gry; bez outro, muzyki i efektów z renderu)</span>
+<b>Podgląd shorta</b> <span class="mut">(kadr 9:16 z nakładką i grafikami, wstawki lektora i przyciszanie dźwięku z gry; bez outro, muzyki, efektu alfa przy cięciu i nakładek na słowa)</span>
 <div class="row" style="margin:8px 0;align-items:flex-start;gap:14px">
  <div><canvas id="shcv" width="540" height="960" style="width:min(270px,100%);aspect-ratio:9/16;background:#000;border-radius:8px;display:block"></canvas></div>
  <div class="mk" style="min-width:200px;flex:1">
@@ -365,7 +365,7 @@ section.tabhide{display:none}
 
 <b>4. Nagranie lektora</b>
 <div class="row" style="margin:8px 0"><label>plik audio z ElevenLabs</label><input type="file" id="shnar" accept="audio/*,.mp3,.wav,.m4a" multiple><span class="mut" id="shnari"></span></div>
-<div class="mut" style="margin-bottom:12px">Program wykrywa przerwy między kwestiami i wycina każdą w miejsce wskazane w „kiedy”. Wczytaj jeden plik (albo tyle plików, ile pobrałeś w kroku 3). Jeśli kwestia kończy się po końcu shorta, klip jest wydłużony.</div>
+<div class="mut" style="margin-bottom:12px">Lektor jest opcjonalny: bez wczytanego nagrania render powstaje bez wstawek, z samym dźwiękiem z gry. Program wykrywa przerwy między kwestiami i wycina każdą w miejsce wskazane w „kiedy”. Wczytaj jeden plik (albo tyle plików, ile pobrałeś w kroku 3). Jeśli kwestia kończy się po końcu shorta, klip jest wydłużony.</div>
 
 <b>5. Dźwięk i muzyka</b>
 <div class="row" style="margin:8px 0">
@@ -729,7 +729,8 @@ function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
   const fx=cut&&o.fx&&o.fx.name?o.fx.name:'';
   const trig=trigFor(o,s);
   const lp=loopFor(o,s),fi=o.frameImg&&o.frameImg.name?o.frameImg.name:'';
-  if(!ovs.length&&!fx&&!textFile&&!trig.length&&!lp&&!fi)return{inputs:[],vf:base};
+  const padVf=o.padVf||'',FW=o.FW||o.W,FH=o.FH||o.H;
+  if(!ovs.length&&!fx&&!textFile&&!trig.length&&!lp&&!fi)return{inputs:[],vf:padVf?`${base},${padVf}`:base};
   const inputs=[],parts=[`[0:v]${base}[b0]`];let n=0,cur='b0';
   ovs.forEach(v=>{
     n++;inputs.push('-i '+q(v.name));
@@ -750,14 +751,15 @@ function segVideo(o,vf,s,{cut=false,textFile='',textOffset=0}){
     parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba,setpts=PTS-STARTPTS+${n3(x.delay)}/TB[o${n}]`);
     parts.push(`[${cur}][o${n}]overlay=0:0:eof_action=pass:format=auto[b${n}]`);cur='b'+n;
   });
+  if(padVf){parts.push(`[${cur}]${padVf}[bp]`);cur='bp'}
   if(lp){
     n++;inputs.push(`${/\.webm$/i.test(lp.name)?'-c:v libvpx-vp9 ':''}-stream_loop -1 -i ${q(lp.name)}`);
-    parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba${lp.ss>0?',trim=start='+n3(lp.ss):''},setpts=PTS-STARTPTS+${n3(lp.delay)}/TB[o${n}]`);
+    parts.push(`[${n}:v]scale=${FW}:${FH},format=rgba${lp.ss>0?',trim=start='+n3(lp.ss):''},setpts=PTS-STARTPTS+${n3(lp.delay)}/TB[o${n}]`);
     parts.push(`[${cur}][o${n}]overlay=0:0:eof_action=pass:format=auto[b${n}]`);cur='b'+n;
   }
   if(fi){
     n++;inputs.push(`-loop 1 -framerate ${o.fps||30} -i ${q(fi)}`);
-    parts.push(`[${n}:v]scale=${o.W}:${o.H},format=rgba[o${n}]`);
+    parts.push(`[${n}:v]scale=${FW}:${FH},format=rgba[o${n}]`);
     parts.push(`[${cur}][o${n}]overlay=0:0:format=auto[b${n}]`);cur='b'+n;
   }
   parts.push(`[${cur}]format=yuv420p[vo]`);
@@ -1387,17 +1389,19 @@ function shortsPlan(o){
 }
 function genShortsScript(o){
   const T=o.tmp||'_segshort',Wv=1080,Hv=1920,fps=o.fps,vol=pctVol;
-  const vf=`scale=${Wv}:${Hv}:force_original_aspect_ratio=decrease,pad=${Wv}:${Hv}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`;
+  const Hf=Math.round(Wv*9/16/2)*2,vf=`scale=${Wv}:${Hf}:force_original_aspect_ratio=decrease,pad=${Wv}:${Hf}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`;
+  const vfOut=`scale=${Wv}:${Hv}:force_original_aspect_ratio=decrease,pad=${Wv}:${Hv}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`;
   const venc=o.enc==='vt'?'-c:v h264_videotoolbox -b:v 12M':'-c:v libx264 -crf 18 -preset medium';
   const fr=o.frame&&o.frame.name?o.frame:null,isImg=fr&&/\.(png|jpe?g|webp)$/i.test(fr.name);
-  const o2={...o,W:Wv,H:Hv,overlays:[],fx:null,textfx:null,trigOv:[],loopOv:fr&&!isImg?{name:fr.name,at:0,len:+fr.len||4}:null,frameImg:isImg?{name:fr.name}:null};
+  // grafiki, efekt przy cięciu i nakładki na słowa działają na obszarze filmu 16:9 (jak w głównym montażu); nakładka 9:16 leży na całym kadrze
+  const o2={...o,W:Wv,H:Hf,FW:Wv,FH:Hv,padVf:`pad=${Wv}:${Hv}:(ow-iw)/2:(oh-ih)/2`,textfx:null,loopOv:fr&&!isImg?{name:fr.name,at:0,len:+fr.len||4}:null,frameImg:isImg?{name:fr.name}:null};
   const plan=shortsPlan(o),need=new Set(),sig=[],blocks=[],fmtA='aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo';
   const ou=o.outro&&o.outro.name?o.outro:null,od=ou?(+ou.dur||5):0,ov=ou?Math.min(Math.max(0,+ou.fade||1),od):0;
   const mu=o.music&&o.music.name?o.music:null,nar=o.narr||[];
   nar.forEach(n=>need.add(n.name));if(mu)need.add(mu.name);if(ou)need.add(ou.name);
   const thr=n3(Math.max(0.001,Math.min(1,0.2*Math.pow(0.05,(+o.duck.thr||0)/100)))),ratio=n3(1+19*Math.max(0,Math.min(100,+o.duck.strength||0))/100);
   const sc=`threshold=${thr}:ratio=${ratio}:attack=${Math.round(+o.duck.attack||40)}:release=${Math.round(+o.duck.release||600)}:makeup=1`;
-  if(ou){const c=`ffmpeg -y -loglevel error -i ${q(ou.name)} -vf "${vf}" -af "${fmtA}" ${venc} -c:a pcm_s16le -f matroska ${T}/outro.mkv.tmp.mkv`;
+  if(ou){const c=`ffmpeg -y -loglevel error -i ${q(ou.name)} -vf "${vfOut}" -af "${fmtA}" ${venc} -c:a pcm_s16le -f matroska ${T}/outro.mkv.tmp.mkv`;
     blocks.push(`if [ ! -f ${T}/outro.mkv ]; then`,'  '+c,chkLine(T,'outro.mkv'),`  mv ${T}/outro.mkv.tmp.mkv ${T}/outro.mkv`,'fi');sig.push(c)}
   const outs=[];
   plan.forEach((sh,k)=>{
@@ -1453,7 +1457,7 @@ function genShortsScript(o){
     L.push('  '+mixCmd,`  echo "ok" > ${T}/done_${kk}`,`  rm -f ${T}/s${kk}_*.mkv ${T}/list_${kk}.txt ${T}/listv_${kk}.txt`,'fi');
     blocks.push(...L);
   });
-  const sigAll=hash32(vf+venc+sig.join('\n'));
+  const sigAll=hash32(vf+vfOut+venc+sig.join('\n'));
   const out=['#!/bin/bash','set -e','# 1) kontrola plików','missing=0',
     `for f in ${[...need].map(q).join(' ')}; do`,'  if [ ! -f "$f" ]; then echo "BRAK PLIKU: $f"; missing=1; fi','done',
     'if [ $missing -ne 0 ]; then echo "Uzupełnij brakujące pliki w tym folderze i uruchom skrypt ponownie."; exit 1; fi',
@@ -2250,25 +2254,24 @@ $('shoutro').onchange=e=>{
 for(const [id,vid] of [['shduck','shduckv'],['shthr','shthrv']])$(id).addEventListener('input',()=>{$(vid).textContent=$(id).value});
 function shortsOpts(onlyFirst){
   if(!S.segs.length)throw new Error('Najpierw ustaw montaż (filmy, zakres „od–do”).');
-  const flat=shFlat(),needAudio=flat.length>0;
-  if(needAudio&&!S.shspans.length)throw new Error('Wczytaj nagranie lektora (krok 4).');
+  const hasNarr=S.shspans.length>0&&S.shfiles.length>0;  // bez nagrania lektora wstawki są pomijane i short renderuje się z samym dźwiękiem z gry
   let k=0;const shorts=[];
   S.shorts.forEach(sh=>{
-    const lines=sh.lines.map(l=>{const sp=S.shspans[k++];return sp?{t:parseTime(l.t),text:l.text,f:sp.f,s:sp.s,e:sp.e,dur:(l.dur>0?l.dur:sp.e-sp.s)}:null}).filter(Boolean);
+    const lines=sh.lines.map(l=>{const sp=hasNarr?S.shspans[k]:null;k++;return sp?{t:parseTime(l.t),text:l.text,f:sp.f,s:sp.s,e:sp.e,dur:(l.dur>0?l.dur:sp.e-sp.s)}:null}).filter(Boolean);
     const a=parseTime(sh.a),b=parseTime(sh.b);
     if(b>a)shorts.push({a,b,title:sh.title,outro:sh.outro!==false,lines});
   });
   if(!shorts.length)throw new Error('Dodaj przynajmniej jeden short (poprawne „od” < „do”).');
   const o=opts();
   return{...o,segs:S.segs,startSrc:S.activeSrc||1,shorts:onlyFirst?shorts.slice(0,1):shorts,
-    narr:S.shfiles.map(f=>({name:f.name})),narVol:num($('shnvol').value,100),filmVol:num($('shfvol').value,60),outroVol:num($('shovol').value,100),
+    narr:hasNarr?S.shfiles.map(f=>({name:f.name})):[],narVol:num($('shnvol').value,100),filmVol:hasNarr?num($('shfvol').value,60):100,outroVol:num($('shovol').value,100),
     music:S.shmus?{name:S.shmus,vol:num($('shmvol').value,30),fadeIn:num($('shfin').value,0.5),fadeOut:num($('shfout').value,1)}:null,
     duck:{thr:num($('shthr').value,50),strength:num($('shduck').value,70),attack:40,release:num($('shrel').value,500)},
     outro:S.shoutro?{name:S.shoutro,dur:S.shoutroLen||5,fade:num($('shfade').value,1)}:null,
     frame:S.shframe?{name:S.shframe,len:num($('shframelen').value,4)}:null,
     out:$('shout').value||'short',tmp:'_segshort'};
 }
-$('shdl').onclick=()=>{try{const r=genShortsScript(shortsOpts(false));dl('render_shorty.sh',r.script);$('shdlinfo').textContent=` ${Math.round(r.script.length/1024)} KB · ${r.plan.length} shortów`}catch(e){alert(e.message)}};
+$('shdl').onclick=()=>{try{const r=genShortsScript(shortsOpts(false));dl('render_shorty.sh',r.script);$('shdlinfo').textContent=` ${Math.round(r.script.length/1024)} KB · ${r.plan.length} shortów`+(S.shspans.length?'':' · bez lektora (nie wczytano nagrania)')}catch(e){alert(e.message)}};
 $('shtest').onclick=()=>{try{const o=shortsOpts(true);o.tmp='_segshorttest';o.out=(o.out||'short')+'_test';dl('render_shorty_test.sh',genShortsScript(o).script)}catch(e){alert(e.message)}};
 renderShorts();
 
@@ -2280,6 +2283,18 @@ function shDrawFrame(){
   if(S.shpv){
     const v=S.activeSrc===2?v2:v1;
     if(v.videoWidth){const hh=Math.round(W*v.videoHeight/v.videoWidth);try{cx.drawImage(v,0,(H-hh)/2,W,hh)}catch(e){}}
+  }
+  if(S.shpv&&S.ov){
+    const hh=Math.round(W*9/16),y0=(H-hh)/2;
+    S.ov.forEach(v=>{
+      if(!v.url||!(v.film==='both'||+v.film===S.activeSrc))return;
+      if(!v._img||v._imgUrl!==v.url){v._img=new Image();v._imgUrl=v.url;v._img.src=v.url}
+      const im=v._img;if(!im.complete||!im.naturalWidth)return;
+      const w=W*(+v.w||15)/100,hgt=w*im.naturalHeight/im.naturalWidth;
+      cx.globalAlpha=Math.max(0,Math.min(1,((v.op==null||v.op==='')?100:+v.op)/100));
+      try{cx.drawImage(im,W*(+v.x||0)/100,y0+hh*(+v.y||0)/100,w,hgt)}catch(e){}
+      cx.globalAlpha=1;
+    });
   }
   const fr=S.shframeEl;
   if(fr){try{cx.drawImage(fr,0,0,W,H)}catch(e){}}
