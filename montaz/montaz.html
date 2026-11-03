@@ -1471,6 +1471,9 @@ const v1=$('v1'),v2=$('v2');
 const S={teasers:[],cuts:[],stopAt:null,fxName:'',fxUrl:null,fxOK:false,txName:'',txOK:false,ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'src',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
 const fmt=t=>{const s=Math.abs(t),hh=Math.floor(s/3600),mm=Math.floor(s/60)%60,ss=(s%60).toFixed(2).padStart(5,'0');return (t<0?'-':'')+(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+ss};
 const tv=id=>parseTime($(id).value);
+// koniec zakresu dla instrukcji ChatGPT: puste „do” (albo „do” ≤ „od”) = do końca materiału
+const rangeOut=()=>{const a=tv('tin'),b=tv('tout');return b>a?b:1e9};
+const promptLines=txt=>(String(txt).match(/\n\[\d+:\d\d:\d\d[^\]]*\] /g)||[]).length;
 const offset=()=>S.m2-S.m1;
 const hitKey=h=>h.rule+':'+h.src+'@'+h.t.toFixed(3);
 
@@ -1917,9 +1920,10 @@ $('mgen').onclick=()=>{
   if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
   const src=$('msrc').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
   if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
-  const txt=buildMomentsPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),nLong:num($('mnl').value,15),nShort:num($('mns').value,8),min:num($('mmin').value,10),max:num($('mmax').value,40),kind:$('mkind').value,ctx:$('mctx').value});
+  const txt=buildMomentsPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:rangeOut(),nLong:num($('mnl').value,15),nShort:num($('mns').value,8),min:num($('mmin').value,10),max:num($('mmax').value,40),kind:$('mkind').value,ctx:$('mctx').value});
+  if(!promptLines(txt)){alert('W zakresie „od–do” nie ma żadnej linii transkrypcji. Sprawdź zakres (zakładka „Słowa i cięcia”) i czy wczytałeś transkrypcję właściwego filmu.');return}
   dl('instrukcja_chatgpt_momenty.txt',txt);
-  $('mgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
+  $('mgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów) · linii transkrypcji: ${promptLines(txt)}`;
 };
 function loadMomText(txt){
   try{
@@ -2041,9 +2045,10 @@ $('wgen').onclick=()=>{
   if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
   const src=$('wsrcsel').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
   if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
-  const txt=buildWeekPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),targetMin:num($('wmin').value,4),cmin:num($('wcmin').value,8),cmax:num($('wcmax').value,25),ctx:$('wctx').value,greetPrompt:$('wgreet').value,audience:$('waud').value});
+  const txt=buildWeekPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:rangeOut(),targetMin:num($('wmin').value,4),cmin:num($('wcmin').value,8),cmax:num($('wcmax').value,25),ctx:$('wctx').value,greetPrompt:$('wgreet').value,audience:$('waud').value});
+  if(!promptLines(txt)){alert('W zakresie „od–do” nie ma żadnej linii transkrypcji. Sprawdź zakres (zakładka „Słowa i cięcia”) i czy wczytałeś transkrypcję właściwego filmu.');return}
   dl('instrukcja_chatgpt_tydzien.txt',txt);
-  $('wgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
+  $('wgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów) · linii transkrypcji: ${promptLines(txt)}`;
 };
 function weekNarFiles(){return buildNarrationFiles(wParas().map(p=>p.text.trim()).filter(Boolean),{maxChars:num($('wmaxc').value,4500),breaks:$('wbrk').checked})}
 $('wtxt').onclick=()=>{
@@ -2176,9 +2181,10 @@ $('shgen').onclick=()=>{
   if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
   const src=$('shsrc').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
   if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
-  const txt=buildShortsPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:tv('tout'),n:num($('shn').value,8),minS:num($('shmin').value,20),maxS:num($('shmax').value,50),kind:$('shkind').value,maxWords:num($('shmw').value,10),ctx:$('shctx').value});
+  const txt=buildShortsPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:rangeOut(),n:num($('shn').value,8),minS:num($('shmin').value,20),maxS:num($('shmax').value,50),kind:$('shkind').value,maxWords:num($('shmw').value,10),ctx:$('shctx').value});
+  if(!promptLines(txt)){alert('W zakresie „od–do” nie ma żadnej linii transkrypcji. Sprawdź zakres (zakładka „Słowa i cięcia”) i czy wczytałeś transkrypcję właściwego filmu.');return}
   dl('instrukcja_chatgpt_shorty.txt',txt);
-  $('shgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów)`;
+  $('shgeninfo').textContent=` ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów) · linii transkrypcji: ${promptLines(txt)}`;
 };
 const shNarFiles=()=>buildNarrationFiles(shFlat().map(x=>x.l.text.trim()).filter(Boolean),{maxChars:num($('shmaxc').value,5000),breaks:true,breakSec:num($('shbrk').value,2)});
 $('shtxt').onclick=()=>{
