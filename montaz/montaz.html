@@ -341,6 +341,16 @@ section.tabhide{display:none}
 <div class="row" style="margin-top:6px"><textarea id="shpaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON)" style="height:70px"></textarea></div>
 <div class="row" style="margin:6px 0 12px"><button id="shload">Wczytaj wklejoną odpowiedź</button><span class="mut" id="shmsg"></span></div>
 
+<b>Podgląd shorta</b> <span class="mut">(kadr 9:16 z nakładką, wstawki lektora i przyciszanie dźwięku z gry; bez outro, muzyki i efektów z renderu)</span>
+<div class="row" style="margin:8px 0;align-items:flex-start;gap:14px">
+ <div><canvas id="shcv" width="540" height="960" style="width:min(270px,100%);aspect-ratio:9/16;background:#000;border-radius:8px;display:block"></canvas></div>
+ <div class="mk" style="min-width:200px;flex:1">
+  <div class="row"><label>short</label><select id="shpvsel" style="width:70px"></select><button id="shpvgo" class="pri">▶ Podgląd shorta</button><button id="shpvstop">■ Stop</button></div>
+  <div class="mono" id="shpvinfo" style="min-height:2.6em">Wczytaj filmy, listę shortów i (dla głosu) nagranie lektora.</div>
+  <div class="mut">Jeśli nakładka to plik .mov (ProRes), przeglądarka może go nie odtworzyć w podglądzie, ale render go użyje.</div>
+ </div>
+</div>
+
 <b>2. Shorty i wstawki lektora</b> <span class="mut">(czasy i teksty możesz poprawiać; „kiedy” = czas na osi montażu, w którym lektor zaczyna mówić)</span>
 <div id="shlist" style="margin:8px 0"></div>
 <div class="row" style="margin-bottom:12px"><button id="shadd">+ dodaj short</button><label><input type="checkbox" id="shoutall" checked> outro w każdym shorcie</label><span class="mut" id="shinfo"></span></div>
@@ -2064,7 +2074,7 @@ async function envOf(file){
     const buf=await ac.decodeAudioData(await file.arrayBuffer()),hop=0.05,n=Math.max(1,Math.round(buf.sampleRate*hop)),ch=buf.numberOfChannels,env=[];
     const d=[];for(let c=0;c<ch;c++)d.push(buf.getChannelData(c));
     for(let i=0;i+n<=buf.length;i+=n){let s=0;for(let c=0;c<ch;c++){const x=d[c];for(let j=0;j<n;j++){const v=x[i+j];s+=v*v}}env.push(Math.sqrt(s/(n*ch)))}
-    return{env,hop,dur:buf.duration};
+    return{env,hop,dur:buf.duration,buf};
   }finally{ac.close&&ac.close()}
 }
 $('wnar').onchange=async e=>{
@@ -2136,7 +2146,7 @@ function renderShorts(){
   S.shorts.forEach((sh,si)=>{
     const card=document.createElement('div');card.className='mk';card.style.cssText='border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px';
     card.innerHTML=`<div class="row"><b>#${si+1}</b><label>od</label><input type="text" class="a" style="width:88px"><label>do</label><input type="text" class="b" style="width:88px"><span class="mono ml">—</span>
-      <label>tytuł (nazwa pliku)</label><input type="text" class="t" style="width:min(260px,40vw)"><label><input type="checkbox" class="o"> outro</label><button class="p">▶</button><button class="x">✕</button></div>
+      <label>tytuł (nazwa pliku)</label><input type="text" class="t" style="width:min(260px,40vw)"><label><input type="checkbox" class="o"> outro</label><button class="p" title="surowy fragment filmu (poziomo)">▶ film</button><button class="pv" title="podgląd shorta 9:16">▶ short</button><button class="x">✕</button></div>
       <table class="lt" style="margin-top:6px"></table><div class="row" style="margin-top:4px"><button class="al">+ wstawka</button></div>`;
     const a=card.querySelector('.a'),b=card.querySelector('.b'),t=card.querySelector('.t'),o=card.querySelector('.o'),ml=card.querySelector('.ml');
     a.value=sh.a;b.value=sh.b;t.value=sh.title||'';o.checked=sh.outro!==false;
@@ -2144,6 +2154,7 @@ function renderShorts(){
     a.oninput=()=>{sh.a=a.value;upd();shInfo()};b.oninput=()=>{sh.b=b.value;upd();shInfo()};t.oninput=()=>{sh.title=t.value};
     o.onchange=()=>{sh.outro=o.checked};
     card.querySelector('.p').onclick=()=>previewRange(parseTime(sh.a),parseTime(sh.b),false);
+    card.querySelector('.pv').onclick=()=>{$('shpvsel').value=String(si);shPreview(si);$('shcv').scrollIntoView({block:'center',behavior:'smooth'})};
     card.querySelector('.x').onclick=()=>{S.shorts.splice(si,1);S.shspans=[];renderShorts()};
     const lt=card.querySelector('.lt');
     sh.lines.forEach((l,li)=>{
@@ -2159,6 +2170,7 @@ function renderShorts(){
     card.querySelector('.al').onclick=()=>{sh.lines.push({t:sh.b||'',text:''});S.shspans=[];renderShorts()};
     k0+=sh.lines.length;box.appendChild(card);
   });
+  const sel=$('shpvsel');if(sel){const cur=sel.value;sel.innerHTML=S.shorts.map((_,i)=>`<option value="${i}">${i+1}</option>`).join('');if(cur&&+cur<S.shorts.length)sel.value=cur}
   shInfo();
 }
 function shInfo(){
@@ -2195,7 +2207,7 @@ $('shtxt').onclick=()=>{
 };
 $('shnar').onchange=async e=>{
   const fl=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-  S.shfiles=[];S.shspans=[];
+  S.shfiles=[];S.shspans=[];S.shbufs=[];
   if(!fl.length){$('shnari').textContent='';renderShorts();return}
   $('shnari').textContent=' analizuję…';
   try{
@@ -2213,7 +2225,7 @@ $('shnar').onchange=async e=>{
       let k0=0;
       ens.forEach((x,i)=>{const c=gen[i].count,r=splitDurations(x.env,x.hop,x.dur,c,words.slice(k0,k0+c));r.spans.forEach(s=>spans.push({f:i,...clampSp(s,x)}));k0+=c;if(!r.exact)msg.push(`plik ${i+1}: za mało przerw`)});
     }
-    S.shfiles=fl.map((f,i)=>({name:f.name,dur:ens[i].dur}));S.shspans=spans;
+    S.shfiles=fl.map((f,i)=>({name:f.name,dur:ens[i].dur}));S.shspans=spans;S.shbufs=ens.map(x=>x.buf);
     $('shnari').textContent=` ${fl.map(f=>f.name).join(', ')} · ${fmt(S.shfiles.reduce((a,f)=>a+f.dur,0))}`+(msg.length?' · '+msg.join('; '):' · przerwy wykryte');
   }catch(err){$('shnari').textContent=' Nie udało się: '+err.message}
   renderShorts();
@@ -2222,6 +2234,13 @@ $('shmus').onchange=e=>{const f=e.target.files[0];S.shmus=f?f.name:'';$('shmusi'
 const shMeta=(f,cb)=>{const v=document.createElement('video');v.preload='metadata';v.onloadedmetadata=()=>{cb(isFinite(v.duration)?v.duration:0);URL.revokeObjectURL(v.src)};v.onerror=()=>cb(0);v.src=URL.createObjectURL(f)};
 $('shframe').onchange=e=>{
   const f=e.target.files[0];S.shframe=f?f.name:'';$('shframei').textContent=f?' '+f.name:'';
+  S.shframeEl=null;
+  if(f){
+    const url=URL.createObjectURL(f);
+    if(/\.(png|jpe?g|webp)$/i.test(f.name)){const im=new Image();im.onload=()=>{S.shframeEl=im;shDrawFrame()};im.src=url}
+    else{const v=document.createElement('video');v.loop=true;v.muted=true;v.playsInline=true;v.onloadeddata=()=>{S.shframeEl=v;shDrawFrame()};v.onerror=()=>{S.shframeEl=null;$('shframei').textContent+=' · podglądu nie da się odtworzyć w przeglądarce (render zadziała)'};v.src=url}
+  }
+  shDrawFrame();
   if(f&&!/\.(png|jpe?g|webp)$/i.test(f.name))shMeta(f,d=>{if(d>0){$('shframelen').value=Math.round(d*100)/100;$('shframei').textContent=` ${f.name} · pętla ${fmt(d)}`}});
 };
 $('shoutro').onchange=e=>{
@@ -2252,6 +2271,71 @@ function shortsOpts(onlyFirst){
 $('shdl').onclick=()=>{try{const r=genShortsScript(shortsOpts(false));dl('render_shorty.sh',r.script);$('shdlinfo').textContent=` ${Math.round(r.script.length/1024)} KB · ${r.plan.length} shortów`}catch(e){alert(e.message)}};
 $('shtest').onclick=()=>{try{const o=shortsOpts(true);o.tmp='_segshorttest';o.out=(o.out||'short')+'_test';dl('render_shorty_test.sh',genShortsScript(o).script)}catch(e){alert(e.message)}};
 renderShorts();
+
+// podgląd shorta 9:16
+S.shbufs=[];S.shframeEl=null;S.shpv=null;S.shsrcs=[];let shRaf=0;
+function shDrawFrame(){
+  const cv=$('shcv');if(!cv)return;const cx=cv.getContext('2d'),W=cv.width,H=cv.height;
+  cx.fillStyle='#000';cx.fillRect(0,0,W,H);
+  if(S.shpv){
+    const v=S.activeSrc===2?v2:v1;
+    if(v.videoWidth){const hh=Math.round(W*v.videoHeight/v.videoWidth);try{cx.drawImage(v,0,(H-hh)/2,W,hh)}catch(e){}}
+  }
+  const fr=S.shframeEl;
+  if(fr){try{cx.drawImage(fr,0,0,W,H)}catch(e){}}
+}
+function shEnd(msg){
+  cancelAnimationFrame(shRaf);
+  (S.shsrcs||[]).forEach(s=>{try{s.stop()}catch(e){}});S.shsrcs=[];
+  v1.volume=v2.volume=1;if(S.shframeEl&&S.shframeEl.pause)S.shframeEl.pause();
+  const was=S.shpv;S.shpv=null;
+  if(S.playing)stopPlay();
+  shDrawFrame();
+  if(msg&&was)$('shpvinfo').textContent=msg;
+}
+async function shPreview(si){
+  if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
+  const sh=S.shorts[si];if(!sh){alert('Brak shorta.');return}
+  const a=parseTime(sh.a),b=parseTime(sh.b);if(!(b>a)){alert('Ustaw zakres shorta: „od” < „do”.');return}
+  let k0=0;for(let i=0;i<si;i++)k0+=S.shorts[i].lines.length;
+  let missing=0;
+  const lines=sh.lines.map((l,li)=>{const sp=S.shspans[k0+li];if(!sp){missing++;return{t:parseTime(l.t),dur:wWords(l.text)/2.3,f:-1,s:0,e:0,text:l.text}}return{t:parseTime(l.t),dur:(l.dur>0?l.dur:sp.e-sp.s),f:sp.f,s:sp.s,e:sp.e,text:l.text}});
+  const plan=shortsPlan({segs:S.segs,startSrc:S.activeSrc||1,shorts:[{a,b,lines}]})[0];
+  shEnd();
+  if(S.mode!=='mon'){document.querySelector('[name=mode][value=mon]').checked=true;setMode('mon')}
+  const base=Math.min(1,num($('shfvol').value,60)/100),nvol=Math.min(1,num($('shnvol').value,100)/100);
+  S.shpv={a,D:plan.D,lines:plan.lines};S.stopAt=a+plan.D;seekTo(a);S.playing=true;
+  if(S.shframeEl&&S.shframeEl.play){S.shframeEl.currentTime=0;S.shframeEl.play().catch(()=>{})}
+  try{await Promise.all([v1.play(),v2.play()])}catch(e){shEnd();alert('Nie można odtworzyć: '+e.message);return}
+  loop();
+  // głos lektora: Web Audio, zsynchronizowany z aktualną pozycją filmu
+  if(!S.shac){const AC=window.AudioContext||window.webkitAudioContext;S.shac=new AC()}
+  try{await S.shac.resume()}catch(e){}
+  const ac=S.shac,tt=Math.max(0,v1.currentTime-a);
+  plan.lines.forEach(l=>{
+    const buf=S.shbufs[l.f];if(!buf)return;
+    const src=ac.createBufferSource(),g=ac.createGain();src.buffer=buf;g.gain.value=nvol;src.connect(g).connect(ac.destination);
+    const delay=l.st-tt,off=Math.max(0,l.s),len=l.dur+0.15;
+    if(delay>=0)src.start(ac.currentTime+delay,off,len);
+    else if(-delay<len)src.start(ac.currentTime,off-delay,len+delay);
+    else return;
+    S.shsrcs.push(src);
+  });
+  const tick=()=>{
+    if(!S.shpv)return;
+    if(!S.playing){shEnd('Koniec podglądu.');return}
+    const t=Math.max(0,v1.currentTime-S.shpv.a),cur=S.shpv.lines.find(l=>t>=l.st-0.05&&t<=l.en+0.25);
+    const vv=cur?base*0.35:base;v1.volume=v2.volume=Math.max(0,Math.min(1,vv));
+    shDrawFrame();
+    $('shpvinfo').textContent=`${fmt(t)} / ${fmt(S.shpv.D)}`+(cur?`\n🎙 ${cur.text}`:'')+(missing&&!S.shbufs.length?'\n(bez głosu: wczytaj nagranie lektora)':'');
+    shRaf=requestAnimationFrame(tick);
+  };
+  tick();
+}
+$('shpvgo').onclick=()=>shPreview(+$('shpvsel').value||0);
+$('shpvstop').onclick=()=>shEnd('Zatrzymano.');
+$('shpvinfo').style.whiteSpace='pre-line';
+shDrawFrame();
 
 // ============ zakładki ============
 const TABS=[['files','Pliki'],['preview','Podgląd i markery'],['words','Słowa i cięcia'],['fx','Grafiki i efekty'],['teaser','Zajawka'],['moments','Najlepsze momenty'],['week','W tym tygodniu'],['shorts','Shorty'],['export','Eksport i skrypt']];
