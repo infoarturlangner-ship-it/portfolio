@@ -184,6 +184,17 @@ Wszystko z głównego montażu działa w shortach: cięcia kamer, dźwięki cię
 
 **Lektor jest opcjonalny:** bez wczytanego nagrania render powstaje bez wstawek (dźwięk z gry 100%, długość shorta = „od–do”). Wynik: `render_shorty.sh` (wznawianie, kontrola plików i fragmentów) oraz wersja testowa z pierwszym shortem.
 
+### Montaż AI (ChatGPT decyduje, którą kamerę pokazać)
+
+Zakładka „Montaż AI” jest aktywna po wczytaniu obu filmów i obu transkrypcji oraz ustawieniu zakresu „od–do”. Synchronizacja M1/M2 jest zalecana (program ostrzega, jeśli jej brak).
+
+1. **Instrukcje dla ChatGPT.** Program sam dopasowuje zdania z transkrypcji filmu 1 i filmu 2 (po tekście, z tolerancją na błędy rozpoznawania i polskie znaki) i oznacza je na wspólnej osi czasu: `F1→F2 +1.2s` (zdanie padło w transkrypcji filmu 1 wcześniej, więc mówi osoba z kamery 1), `F2→F1`, `F1` / `F2` (zdanie tylko w jednej transkrypcji), `F1=F2` (różnica zbyt mała). ChatGPT dostaje te oznaczenia plus zasady: domyślnie pokazuj kamerę osoby mówiącej, ale uwzględniaj kontekst rozmowy (reakcje, odpowiedzi, długie wypowiedzi), nie przełączaj częściej niż co minimalną długość ujęcia (domyślnie 3 s). Możesz podać imiona osób z filmu 1 i 2 i kontekst. Instrukcje są dzielone na części po ok. 20 minut (do ustawienia), bo całość nie zmieści się w jednej wiadomości; przycisk pobiera wszystkie naraz, a każdą część można pobrać osobno.
+2. **Odpowiedzi.** Każda odpowiedź to JSON `{"przelaczenia":[{"t":"0:12:03","kamera":1},…]}`. Wczytujesz je z plików (kilka naraz) albo wklejasz po jednej; program łączy je w jedną listę i ostrzega o częściach bez przełączeń.
+3. **Lista przełączeń** jest edytowalna (czas, kamera, podgląd, usuwanie, dodawanie). Parametr „wyprzedzenie cięcia” (domyślnie 0,3 s) przesuwa każde cięcie tuż przed początek wypowiedzi.
+4. **Tryb montażu** przełączasz w zakładce „Słowa i cięcia” (na słowa kluczowe / montaż AI; tryby się wykluczają). Wybrany tryb dotyczy całego programu: podziału na części, intro/outro, zajawki, momentów, shortów i „W tym tygodniu”. Efekty przy cięciu, błysk i domyślny dźwięk cięcia działają w obu trybach. Lista przełączeń zapisuje się w projekcie.
+
+ChatGPT widzi tylko transkrypcje, nie obraz, więc decyzje opierają się na rozmowie.
+
 ### Zakładki
 
 Program jest podzielony na poziome zakładki (u góry, przypięte do góry strony): Pliki, Podgląd i markery, Słowa i cięcia, Grafiki i efekty (grafiki, efekt przy cięciu, nakładki wideo na słowa), Zajawka, Najlepsze momenty, W tym tygodniu, Shorty, Eksport i skrypt. Przycisk „▶” przy scenach/momentach/zajawkach sam przełącza na zakładkę „Podgląd i markery”. Program pamięta ostatnią otwartą zakładkę.

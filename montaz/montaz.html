@@ -117,6 +117,12 @@ section.tabhide{display:none}
 
 <section data-tab="words">
 <h2>3. Słowa i cięcia</h2>
+<div class="row" style="margin-bottom:12px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+ <b>Tryb montażu</b>
+ <label style="color:var(--txt)"><input type="radio" name="cutmode" value="kw" checked> na słowa kluczowe</label>
+ <label style="color:var(--txt)"><input type="radio" name="cutmode" value="ai" id="cmai" disabled> montaż AI</label>
+ <span class="mut" id="cutmodeinfo">Montaż AI włączy się po wczytaniu listy przełączeń (zakładka „Montaż AI”). Wybrany tryb dotyczy całego programu: części, intro/outro, zajawki, momentów, shortów i „W tym tygodniu”. W trybie AI słowa kluczowe i automatyczna zmiana kamery są ignorowane.</span>
+</div>
 <div class="row" style="margin-bottom:6px"><b>Domyślny dźwięk cięcia</b>
  <input type="file" id="dsf" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" style="max-width:230px"><span class="mut" id="dsn"></span>
  <label>głośność %</label><input type="number" id="dsv" value="100" min="0" max="300" step="5" style="width:70px">
@@ -141,6 +147,33 @@ section.tabhide{display:none}
 <div class="mut" style="margin:8px 0" id="stat">—</div>
 <div class="tl" id="tl"><div class="head" id="head" style="left:0"></div></div>
 <div class="hitbox" style="margin-top:10px"><table id="hits"></table></div>
+</section>
+
+<section id="aisec" data-tab="ai">
+<h2>Montaż AI (ChatGPT decyduje, którą kamerę pokazać)</h2>
+<div class="mut" style="margin-bottom:10px">ChatGPT dostaje transkrypcje obu filmów na wspólnej osi czasu i zwraca listę przełączeń kamer dla całego zakresu „od–do”. Program porównuje transkrypcje sam: zdanie, które w transkrypcji filmu 1 pojawia się wcześniej niż w filmie 2, wypowiada osoba z kamery 1 (jej mikrofon), a odwrotnie, osoba z kamery 2. ChatGPT bierze to pod uwagę razem z kontekstem rozmowy (reakcje, odpowiedzi, długie wypowiedzi). Lista jest dzielona na części po kilkanaście minut, bo całość nie zmieści się w jednej wiadomości.</div>
+<div id="aireq" style="margin-bottom:10px"></div>
+
+<b>1. Instrukcje dla ChatGPT</b>
+<div class="row" style="margin:8px 0">
+ <label>film 1 to kamera osoby</label><input type="text" id="ain1" placeholder="np. Artur" style="width:130px">
+ <label>film 2 to kamera osoby</label><input type="text" id="ain2" placeholder="np. Kamil" style="width:130px">
+ <label>min. długość ujęcia (s)</label><input type="number" id="aimin" value="3" min="0.5" step="0.5" style="width:60px">
+ <label>wyprzedzenie cięcia (s)</label><input type="number" id="ailead" value="0.3" min="0" step="0.1" style="width:60px">
+ <label>długość części (min)</label><input type="number" id="aichunk" value="20" min="2" step="1" style="width:60px">
+</div>
+<div class="row" style="margin-bottom:8px"><label>kontekst (opcjonalnie)</label><input type="text" id="aictx" placeholder="np. gra Fortnite, dwóch graczy, luźna rozmowa po polsku" style="width:min(520px,100%)"></div>
+<div class="row" style="margin-bottom:6px"><button id="aigen" class="pri">⬇ Pobierz wszystkie instrukcje</button><span class="mut" id="aigeninfo"></span></div>
+<div id="aiparts" class="row" style="margin-bottom:12px"></div>
+
+<b>2. Odpowiedzi ChatGPT</b>
+<div class="row" style="margin:8px 0"><label>pliki z odpowiedziami (.json/.txt, można kilka naraz)</label><input type="file" id="aiin" multiple></div>
+<div class="row" style="margin-top:6px"><textarea id="aipaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON); każde kliknięcie dodaje kolejną część" style="height:70px"></textarea></div>
+<div class="row" style="margin:6px 0 12px"><button id="aiload">Dodaj wklejoną odpowiedź</button><button id="aiclear">Wyczyść listę</button><button id="aiuse" class="pri">Użyj montażu AI</button><span class="mut" id="aimsg"></span></div>
+
+<b>3. Lista przełączeń</b> <span class="mut">(możesz poprawiać czas i kamerę, dodawać i usuwać)</span>
+<div class="hitbox" style="max-height:340px;margin:6px 0"><table id="aitab"></table></div>
+<div class="row" style="margin-bottom:8px"><button id="aiadd">+ dodaj przełączenie</button><span class="mut" id="aiinfo"></span></div>
 </section>
 
 <section data-tab="fx">
@@ -1331,6 +1364,96 @@ function genWeekScript(o){
     mixCmd,`rm -f ${T}_all.mkv`,`rm -rf ${T}`,`echo "Gotowe: ${out.replace(/["$`\\]/g,'')}"`];
   return{script:L.join('\n'),clips,total,flatCount:flat.length};
 }
+// ============ Montaż AI: dopasowanie transkrypcji obu filmów i instrukcja dla ChatGPT ============
+const aiStem=w=>w.slice(0,5);
+function normWords(s){
+  return String(s||'').toLowerCase().replace(/ł/g,'l').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(w=>w.length>1).map(aiStem);
+}
+function lineSim(a,b){
+  const A=normWords(a),B=normWords(b);if(!A.length||!B.length)return 0;
+  const cnt=new Map();A.forEach(w=>cnt.set(w,(cnt.get(w)||0)+1));
+  let common=0;B.forEach(w=>{const c=cnt.get(w)||0;if(c>0){common++;cnt.set(w,c-1)}});
+  return 2*common/(A.length+B.length);
+}
+// Zdania z obu transkrypcji na wspólnej osi czasu. d = czas w filmie 2 minus czas w filmie 1 (d>0: film 1 ma frazę wcześniej).
+function matchTranscripts(lines1,lines2,offset,{win=6,minSim=0.5,thr=0.3,inT=0,outT=1e9}={}){
+  const A=(lines1||[]).map(l=>({t:l.t0,text:l.text})).filter(l=>l.t>=inT-win&&l.t<outT+win).sort((x,y)=>x.t-y.t);
+  const B=(lines2||[]).map(l=>({t:l.t0-offset,text:l.text})).filter(l=>l.t>=inT-win&&l.t<outT+win).sort((x,y)=>x.t-y.t);
+  const used=new Set(),out=[];let lo=0;
+  for(const a of A){
+    while(lo<B.length&&B[lo].t<a.t-win)lo++;
+    let best=-1,bs=0,bd=1e9;
+    for(let j=lo;j<B.length&&B[j].t<=a.t+win;j++){
+      if(used.has(j))continue;
+      const s=lineSim(a.text,B[j].text),d=Math.abs(B[j].t-a.t);
+      if(s>=minSim&&(s>bs+1e-9||(Math.abs(s-bs)<1e-9&&d<bd))){best=j;bs=s;bd=d}
+    }
+    if(best>=0){used.add(best);const b=B[best],d=b.t-a.t;out.push({t:Math.min(a.t,b.t),kind:d>=thr?'1>2':d<=-thr?'2>1':'1=2',d,a,b,sim:bs})}
+    else out.push({t:a.t,kind:'1',a});
+  }
+  B.forEach((b,j)=>{if(!used.has(j))out.push({t:b.t,kind:'2',b})});
+  return out.filter(e=>e.t>=inT&&e.t<outT).sort((x,y)=>x.t-y.t);
+}
+function aiEntryLine(e){
+  const ts=`[${fmtHMS(e.t)}]`;
+  if(e.kind==='1')return `${ts} F1 ${e.a.text}`;
+  if(e.kind==='2')return `${ts} F2 ${e.b.text}`;
+  const dd=Math.abs(e.d).toFixed(1),first=e.kind==='2>1'?e.b:e.a,second=e.kind==='2>1'?e.a:e.b;
+  const tag=e.kind==='1=2'?'F1=F2':e.kind==='1>2'?`F1→F2 +${dd}s`:`F2→F1 +${dd}s`;
+  const same=e.sim>=0.85;
+  return `${ts} ${tag} ${first.text}`+(same?'':` | ${e.kind==='2>1'?'F1':'F2'}: ${second.text}`);
+}
+function aiChunks(inT,outT,chunkSec){
+  const c=Math.max(120,+chunkSec||1200),out=[];
+  for(let a=inT;a<outT-1e-6;a+=c)out.push({a,b:Math.min(outT,a+c)});
+  return out;
+}
+function buildAiCutPrompt({entries=[],a,b,idx=1,total=1,n1='',n2='',minShot=3,ctx=''}){
+  const nm=(n,i)=>String(n||'').trim()?`osoba „${String(n).trim()}”`:`osoba z kamery ${i}`;
+  const L=['# Zadanie: montaż kamer (przełączanie między dwiema kamerami)','',
+   `Jesteś montażystą. Dwie osoby grają razem i rozmawiają, a każda ma własne nagranie: **film 1** = ${nm(n1,1)}, **film 2** = ${nm(n2,2)}. Mam transkrypcje obu nagrań, połączone na wspólnej osi czasu. Zdecyduj, w których momentach przełączyć widok między kamerą 1 a kamerą 2, aby montaż pokazywał to, co w rozmowie najważniejsze. To jest fragment ${idx} z ${total} (od ${fmtHMS(a)} do ${fmtHMS(b)}); podaj przełączenia tylko dla tego fragmentu.`,''];
+  if(String(ctx||'').trim())L.push('Kontekst: '+String(ctx).trim(),'');
+  L.push('## Jak czytać transkrypcję',
+   '- Każda linia: `[g:mm:ss] oznaczenie tekst`. Czasy są na wspólnej osi czasu montażu.',
+   '- `F1` (sam): fraza jest tylko w transkrypcji filmu 1. Najpewniej mówi osoba z kamery 1 (jej mikrofon), a w filmie 2 nie została rozpoznana.',
+   '- `F2` (sam): analogicznie, mówi osoba z kamery 2.',
+   '- `F1→F2 +1.2s`: to samo zdanie padło w obu transkrypcjach, ale w transkrypcji filmu 1 pojawiło się wcześniej o podaną liczbę sekund. Drugi film słyszy głos z opóźnieniem, więc **mówi osoba z kamery 1**.',
+   '- `F2→F1 +0.8s`: odwrotnie, **mówi osoba z kamery 2**.',
+   '- `F1=F2`: różnica czasu jest zbyt mała, żeby wskazać mówiącego (czasy w napisach są zgrubne, ±1–2 s). Zdecyduj z kontekstu rozmowy.',
+   '- Gdy po znaku `|` jest druga wersja zdania (`F2: …`), oznacza to, że transkrypcje różnią się; im czystsza wersja, tym pewniej to ta osoba mówi do swojego mikrofonu.','',
+   '## Zasady montażu',
+   '- Domyślnie pokazuj kamerę osoby, która właśnie mówi.',
+   '- Możesz pokazać kamerę rozmówcy, gdy z kontekstu wynika, że to lepsze: reakcja na żart lub zaskoczenie, odpowiedź na pytanie, gdy ktoś opowiada o czymś, co dzieje się u drugiej osoby, albo gdy jedna osoba mówi bardzo długo (rozbij ją od czasu do czasu ujęciem rozmówcy).',
+   `- Minimalna długość ujęcia to ${minShot} s: nie przełączaj częściej. Krótkie wtrącenia (poniżej ${minShot} s) zignoruj i zostań przy bieżącej kamerze.`,
+   '- Nie przełączaj bez potrzeby: gdy nie ma wyraźnego powodu, zostań na bieżącej kamerze. Gdy nie ma linii transkrypcji (cisza), też zostań.',
+   '- Podawaj czas początku wypowiedzi, od której ma obowiązywać nowa kamera. Program doda krótkie wyprzedzenie.',
+   '- Wypisuj tylko **zmiany** kamery. Pierwszy wpis ma czas początku fragmentu i wskazuje kamerę startową (wybierz sensownie, nie znasz poprzedniego fragmentu).','',
+   '## Format odpowiedzi',
+   'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), w tej strukturze. Czasy jako tekst „g:mm:ss”, a kamera jako liczba 1 lub 2:','',
+   '```json','{ "przelaczenia": [',`  { "t": "${fmtHMS(a)}", "kamera": 1 },`,`  { "t": "${fmtHMS(a+14)}", "kamera": 2 },`,`  { "t": "${fmtHMS(a+21)}", "kamera": 1 }`,'] }','```','',
+   '## Transkrypcja (wspólna oś czasu)','');
+  entries.forEach(e=>L.push(aiEntryLine(e)));
+  return L.join('\n');
+}
+function parseAiJson(text){
+  const m=String(text).match(/\{[\s\S]*\}|\[[\s\S]*\]/);if(!m)throw new Error('nie znalazłem JSON-a');
+  let j=JSON.parse(m[0]);
+  const list=Array.isArray(j)?j:(j.przelaczenia||j['przełączenia']||j.switches||j.cuts||j.ciecia||j['cięcia']||[]);
+  const tt=v=>typeof v==='number'?v:parseTime(v);
+  const out=list.map(x=>Array.isArray(x)?{t:tt(x[0]),cam:+x[1]}:{t:tt(x.t??x.czas??x.time??x.od),cam:+(x.kamera??x.camera??x.film??x.cam)})
+    .filter(x=>isFinite(x.t)&&(x.cam===1||x.cam===2));
+  if(!out.length)throw new Error('JSON nie zawiera przełączeń (t, kamera)');
+  return out;
+}
+// przełączenia -> trafienia dla buildSegments (rule -1 = domyślny dźwięk cięcia)
+function aiHits(sw,lead=0){
+  return (sw||[]).map(s=>({t:Math.max(0,s.t-lead),src:s.cam,act:s.cam,rule:-1,text:'montaż AI'}));
+}
+function aiNormalize(sw){
+  const a=[...sw].sort((x,y)=>x.t-y.t),out=[];
+  for(const s of a){if(out.length&&Math.abs(out[out.length-1].t-s.t)<0.05){out[out.length-1]=s;continue}out.push(s)}
+  return out;
+}
 // ============ Shorty (9:16): krótkie klipy z komentarzem lektora ============
 // instrukcja dla ChatGPT: wybór klipów + krótkie wstawki lektora w trakcie i puenta
 function buildShortsPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,n=8,minS=20,maxS=50,kind='mix',maxWords=10,ctx=''}){
@@ -1482,7 +1605,7 @@ function genEDL(segs,o){
 
 const $=id=>document.getElementById(id);
 const v1=$('v1'),v2=$('v2');
-const S={teasers:[],cuts:[],stopAt:null,fxName:'',fxUrl:null,fxOK:false,txName:'',txOK:false,ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'src',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
+const S={cutMode:'kw',ai:{sw:[]},teasers:[],cuts:[],stopAt:null,fxName:'',fxUrl:null,fxOK:false,txName:'',txOK:false,ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'src',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
 const fmt=t=>{const s=Math.abs(t),hh=Math.floor(s/3600),mm=Math.floor(s/60)%60,ss=(s%60).toFixed(2).padStart(5,'0');return (t<0?'-':'')+(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+ss};
 const tv=id=>parseTime($(id).value);
 // koniec zakresu dla instrukcji ChatGPT: puste „do” (albo „do” ≤ „od”) = do końca materiału
@@ -1595,14 +1718,17 @@ $('seek').oninput=()=>{const was=S.playing;if(was)stopPlay();seekTo(+$('seek').v
 // wyszukiwanie i oś
 function recompute(){
   const o=offset(),inT=tv('tin'),outT=tv('tout');
-  const hits=findAllHits(S.rules,S.w1,S.w2,o,num($('tol').value,4));S.hits=hits;
+  const ai=S.cutMode==='ai'&&S.ai.sw.length>0;
+  const hits=ai?aiHits(S.ai.sw,num($('ailead').value,0.3)):findAllHits(S.rules,S.w1,S.w2,o,num($('tol').value,4));S.hits=hits;
   const active=hits.filter(h=>!S.off.has(hitKey(h)));
-  S.segs=outT>inT?buildSegments(active,{minShot:+$('minshot').value||0,startSrc:+$('start').value,inT,outT,autoSec:$('auto').checked?(+$('autosec').value||0):0}):[];
+  let startSrc=+$('start').value;
+  if(ai){const before=S.ai.sw.filter(s=>s.t<=inT);startSrc=before.length?before[before.length-1].cam:S.ai.sw[0].cam}
+  S.segs=outT>inT?buildSegments(active,{minShot:ai?num($('aimin').value,3):(+$('minshot').value||0),startSrc,inT,outT,autoSec:ai?0:($('auto').checked?(+$('autosec').value||0):0)}):[];
   S.events=sfxEvents(S.segs,S.rules,0,defSfxCfg());S.cuts=S.segs.slice(1).map(s=>s.a);
-  renderHits(inT,outT);renderTL(inT,outT);renderExport();
+  renderHits(inT,outT);renderTL(inT,outT);renderExport();try{aiRefresh()}catch(e){}
   $('seek').min=inT;$('seek').max=outT;
   const used=S.segs.length?S.segs.length-1:0;
-  $('stat').textContent=`Trafień: ${hits.length}${hits.dropped?` (+${hits.dropped} pominiętych jako duplikaty)`:''} (zaznaczonych: ${active.length}) · cięć: ${used} · ujęć: ${S.segs.length} · długość: ${fmt(Math.max(0,outT-inT))}`;
+  $('stat').textContent=(ai?'Montaż AI · przełączeń: '+hits.length+' · ':'')+`Trafień: ${hits.length}${hits.dropped?` (+${hits.dropped} pominiętych jako duplikaty)`:''} (zaznaczonych: ${active.length}) · cięć: ${used} · ujęć: ${S.segs.length} · długość: ${fmt(Math.max(0,outT-inT))}`;
 }
 ['start','minshot','autosec','tol'].forEach(id=>$(id).oninput=recompute);
 $('auto').onchange=recompute;
@@ -1719,7 +1845,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({ai:{sw:S.ai.sw,mode:S.cutMode,set:Object.fromEntries(['ain1','ain2','aimin','ailead','aichunk','aictx'].map(k=>[k,$(k).value]))},vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1731,6 +1857,7 @@ $('load').onchange=async e=>{
   if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
+  if(p.ai){S.ai.sw=aiNormalize((p.ai.sw||[]).map(s=>({t:+s.t,cam:+s.cam})).filter(s=>isFinite(s.t)&&(s.cam===1||s.cam===2)));for(const [k,v] of Object.entries(p.ai.set||{})){if($(k))$(k).value=v}S.cutMode=(p.ai.mode==='ai'&&S.ai.sw.length)?'ai':'kw';document.querySelector(`[name=cutmode][value=${S.cutMode}]`).checked=true;renderAi()}
   S.vtr=(p.vtr||[]).map(r=>({q:r.q||'',qsrc:r.qsrc||'1',name:r.name||'',len:+r.len||5,nofile:!!r.name}));renderVtr();
   if(p.sh){S.shorts=(p.sh.shorts||[]).map(s=>({a:s.a||'',b:s.b||'',title:s.title||'',outro:s.outro!==false,lines:(s.lines||[]).map(l=>({t:l.t||'',text:l.text||''}))}));S.shmus=p.sh.mus||'';S.shframe=p.sh.frame||'';S.shoutro=p.sh.outro||'';S.shspans=[];S.shfiles=[];for(const [k,v] of Object.entries(p.sh.set||{})){if($(k))$(k).value=v}for(const id of['shduck','shthr'])$(id+'v').textContent=$(id).value;renderShorts()}
   if(p.wk){S.week=p.wk.week||{greet:null,items:[]};S.wmus=p.wk.mus||'';S.wintro=p.wk.intro||'';S.wpsfx=p.wk.psfx||'';S.wloop=p.wk.loop||'';S.wdurs=[];S.wfiles=[];for(const [k,v] of Object.entries(p.wk.set||{})){if($(k)){if($(k).type==='checkbox')$(k).checked=!!v;else $(k).value=v}}for(const id of['wduck','wthr'])$(id+'v').textContent=$(id).value;renderWeek()}
@@ -2142,6 +2269,94 @@ $('wdltest').onclick=()=>{try{const o=weekOpts(25);o.tmp='_segweektest';o.out=o.
 renderWeek();
 
 // ============ Shorty ============
+// ============ Montaż AI (UI) ============
+function aiReq(){
+  const inT=tv('tin'),outT=tv('tout'),fin=v=>isFinite(v.duration)&&v.duration>0;
+  const items=[
+    ['Filmy 1 i 2 wczytane',fin(v1)&&fin(v2),true],
+    ['Transkrypcje obu filmów wczytane',!!(S.l1&&S.l1.length&&S.l2&&S.l2.length),true],
+    ['Zakres „od–do” głównego renderu ustawiony',outT>inT,true],
+    ['Synchronizacja kamer (M1/M2) ustawiona',S.m1!==0||S.m2!==0,false]];
+  return{items,ok:items.every(i=>!i[2]||i[1])};
+}
+function aiParts(){
+  const inT=tv('tin'),outT=tv('tout'),entries=matchTranscripts(S.l1,S.l2,offset(),{inT,outT}),ch=aiChunks(inT,outT,num($('aichunk').value,20)*60);
+  const parts=ch.map((c,i)=>({...c,idx:i+1,text:buildAiCutPrompt({entries:entries.filter(e=>e.t>=c.a&&e.t<c.b),a:c.a,b:c.b,idx:i+1,total:ch.length,n1:$('ain1').value,n2:$('ain2').value,minShot:num($('aimin').value,3),ctx:$('aictx').value})}));
+  return{entries,parts};
+}
+function aiRefresh(){
+  const r=aiReq();
+  $('aireq').innerHTML=r.items.map(([n,ok,req])=>`<div style="color:${ok?'var(--ok)':req?'var(--c2)':'var(--mut)'}">${ok?'✓':req?'✗':'•'} ${n}${!ok&&!req?' (nie wymagane, ale bez niej cięcia mogą być przesunięte)':''}</div>`).join('')+(r.ok?'':'<div class="mut" style="margin-top:4px">Uzupełnij wymagane punkty (zakładki „Pliki”, „Podgląd i markery”, „Słowa i cięcia”), żeby pobrać instrukcje.</div>');
+  $('aigen').disabled=!r.ok;$('aigen').style.opacity=r.ok?1:.5;
+  $('cmai').disabled=!S.ai.sw.length;
+  const mi=$('aiinfo');
+  if(mi){
+    let txt=` ${S.ai.sw.length} przełączeń`;
+    if(S.cutMode==='ai'&&S.segs.length){const c1=S.segs.filter(s=>s.src===1).reduce((a,s)=>a+s.b-s.a,0),c2=S.segs.filter(s=>s.src===2).reduce((a,s)=>a+s.b-s.a,0),tot=c1+c2||1;txt+=` · w montażu: kamera 1 ${Math.round(c1/tot*100)}%, kamera 2 ${Math.round(c2/tot*100)}% · średnie ujęcie ${(tot/S.segs.length).toFixed(1)} s`}
+    mi.textContent=txt;
+  }
+}
+$('aigen').onclick=()=>{
+  if(!aiReq().ok){alert('Uzupełnij wymagane punkty na liście powyżej.');return}
+  const {entries,parts}=aiParts();
+  const pairs=entries.filter(e=>e.a&&e.b).length,o1=entries.filter(e=>e.kind==='1').length,o2=entries.filter(e=>e.kind==='2').length;
+  if(!entries.length){alert('W zakresie „od–do” nie ma żadnych linii transkrypcji.');return}
+  $('aigeninfo').textContent=` ${parts.length} części · zdań wspólnych: ${pairs}, tylko w filmie 1: ${o1}, tylko w filmie 2: ${o2}`;
+  const box=$('aiparts');box.innerHTML='';
+  parts.forEach(pt=>{
+    const b=document.createElement('button');b.textContent=`⬇ część ${pt.idx} (${fmtHMS(pt.a)}–${fmtHMS(pt.b)})`;b.title=`${pt.text.length.toLocaleString('pl-PL')} znaków`;
+    b.onclick=()=>dl(`instrukcja_ai_montaz_${String(pt.idx).padStart(2,'0')}_z_${String(parts.length).padStart(2,'0')}.txt`,pt.text);box.appendChild(b);
+  });
+  parts.forEach((pt,i)=>setTimeout(()=>dl(`instrukcja_ai_montaz_${String(pt.idx).padStart(2,'0')}_z_${String(parts.length).padStart(2,'0')}.txt`,pt.text),i*400));
+};
+function renderAi(){
+  const tb=$('aitab');tb.innerHTML='<tr><th>#</th><th>czas</th><th>kamera</th><th></th><th></th></tr>';
+  S.ai.sw.forEach((s,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td><input type="text" class="at" style="width:100px"></td><td><select class="ac"><option value="1">film 1</option><option value="2">film 2</option></select></td><td><button class="ap">▶</button></td><td><button class="ax">✕</button></td>`;
+    const at=tr.querySelector('.at'),ac=tr.querySelector('.ac');at.value=fmtHMS(s.t);ac.value=String(s.cam);
+    at.onchange=()=>{s.t=parseTime(at.value);S.ai.sw=aiNormalize(S.ai.sw);renderAi();recompute()};
+    ac.onchange=()=>{s.cam=+ac.value;recompute()};
+    tr.querySelector('.ap').onclick=()=>previewRange(Math.max(0,s.t-2),s.t+6,false);
+    tr.querySelector('.ax').onclick=()=>{S.ai.sw.splice(i,1);renderAi();recompute()};
+    tb.appendChild(tr);
+  });
+  aiRefresh();
+}
+function addAiText(txt,label){
+  const list=parseAiJson(txt);
+  S.ai.sw=aiNormalize([...S.ai.sw,...list]);renderAi();recompute();
+  return list.length;
+}
+function aiCoverage(){
+  const inT=tv('tin'),outT=tv('tout');if(!(outT>inT)||!S.ai.sw.length)return '';
+  const ch=aiChunks(inT,outT,num($('aichunk').value,20)*60),miss=ch.map((c,i)=>S.ai.sw.some(s=>s.t>=c.a&&s.t<c.b)?0:i+1).filter(Boolean);
+  return miss.length?` UWAGA: brak przełączeń w częściach: ${miss.join(', ')} (tam zostanie jedna kamera).`:' Wszystkie części mają przełączenia.';
+}
+$('aiin').onchange=async e=>{
+  const fl=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})),msgs=[];let n=0;
+  for(const f of fl){try{n+=addAiText(await f.text(),f.name)}catch(err){msgs.push(`${f.name}: ${err.message}`)}}
+  $('aimsg').textContent=` Dodano przełączeń: ${n} z ${fl.length} plików.`+aiCoverage()+(msgs.length?' Błędy: '+msgs.join('; '):'');
+  e.target.value='';
+};
+$('aiload').onclick=()=>{
+  try{const n=addAiText($('aipaste').value,'wklejone');$('aipaste').value='';$('aimsg').textContent=` Dodano przełączeń: ${n}.`+aiCoverage()}
+  catch(err){$('aimsg').textContent=' Nie udało się wczytać: '+err.message}
+};
+$('aiclear').onclick=()=>{S.ai.sw=[];if(S.cutMode==='ai'){S.cutMode='kw';document.querySelector('[name=cutmode][value=kw]').checked=true}renderAi();recompute();$('aimsg').textContent=' Lista wyczyszczona.'};
+$('aiadd').onclick=()=>{const t=tv('tin');S.ai.sw=aiNormalize([...S.ai.sw,{t:t+1,cam:1}]);renderAi();recompute()};
+function setCutMode(m){
+  S.cutMode=(m==='ai'&&S.ai.sw.length)?'ai':'kw';
+  document.querySelector(`[name=cutmode][value=${S.cutMode}]`).checked=true;recompute();
+}
+document.querySelectorAll('[name=cutmode]').forEach(r=>r.onchange=()=>setCutMode(r.value));
+$('aiuse').onclick=()=>{
+  if(!S.ai.sw.length){$('aimsg').textContent=' Najpierw wczytaj odpowiedzi ChatGPT.';return}
+  setCutMode('ai');$('aimsg').textContent=' Włączono montaż AI (tryb można zmienić w zakładce „Słowa i cięcia”).'+aiCoverage();
+};
+['ain1','ain2','aimin','ailead','aichunk','aictx'].forEach(id=>$(id).addEventListener('input',()=>{if(id==='aimin'||id==='ailead')recompute()}));
+renderAi();
+
 S.shorts=[];S.shspans=[];S.shfiles=[];S.shmus='';S.shframe='';S.shoutro='';
 const shFlat=()=>{const a=[];S.shorts.forEach((sh,si)=>sh.lines.forEach((l,li)=>a.push({sh,si,l,li})));return a};
 const shLineDur=(l,k)=>{const sp=S.shspans[k];if(l.dur>0)return l.dur;if(sp)return sp.e-sp.s;return wWords(l.text)/2.3};
@@ -2354,7 +2569,7 @@ $('shpvinfo').style.whiteSpace='pre-line';
 shDrawFrame();
 
 // ============ zakładki ============
-const TABS=[['files','Pliki'],['preview','Podgląd i markery'],['words','Słowa i cięcia'],['fx','Grafiki i efekty'],['teaser','Zajawka'],['moments','Najlepsze momenty'],['week','W tym tygodniu'],['shorts','Shorty'],['export','Eksport i skrypt']];
+const TABS=[['files','Pliki'],['preview','Podgląd i markery'],['words','Słowa i cięcia'],['ai','Montaż AI'],['fx','Grafiki i efekty'],['teaser','Zajawka'],['moments','Najlepsze momenty'],['week','W tym tygodniu'],['shorts','Shorty'],['export','Eksport i skrypt']];
 function showTab(id){
   if(!TABS.some(t=>t[0]===id))id='files';
   document.querySelectorAll('section[data-tab]').forEach(s=>s.classList.toggle('tabhide',s.dataset.tab!==id));
