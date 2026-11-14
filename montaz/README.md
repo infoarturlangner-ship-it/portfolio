@@ -156,6 +156,14 @@ W sekcji „Eksport" ustawiasz długość nakładania (domyślnie 1,5 s; 0 = twa
 - **Montaż → outro:** dźwięk outro zaczyna się wcześniej niż jego obraz, a dźwięk montażu się wycisza.
   Ponieważ outro nie ma materiału „sprzed siebie", jego dźwięk kończy się o tyle samo wcześniej niż obraz outro.
 
+### Podział na odcinki wg AI
+
+W sekcji „Eksport” (przy „podziel na części”) jest drugi sposób wyznaczania granic: **wg AI**. ChatGPT wskazuje, gdzie zakończyć każdy odcinek, żeby kończył się w sensownym momencie (puenta, koniec wątku, naturalna przerwa), a nie w środku zdania czy akcji.
+
+1. Ustaw liczbę odcinków („podziel na części”, co najmniej 2) i kliknij „Pobierz instrukcję (podział na odcinki)”. Dla każdej granicy program wyznacza okno poszukiwań (miejsce równego podziału ± kilka minut, domyślnie 4) i wysyła ChatGPT tylko transkrypcję z tych okien, więc instrukcja jest krótka.
+2. Odpowiedź ChatGPT to JSON `{"podzial":[{"koniec":"0:45:10","powod":"…"}]}` (liczba wpisów = odcinki minus 1). Wczytujesz ją z pliku albo wklejasz.
+3. Program dodaje „po puencie” (domyślnie 1,5 s), żeby nie ściąć ostatniego zdania, przełącza „tnij” na „wg AI” i dzieli dokładnie w tych punktach. Granice można poprawić w tabeli (czas, ▶ podgląd, usuń). Intro/outro, zajawki i tytuły działają jak przy zwykłym podziale. Granice zapisują się w projekcie.
+
 ### Podział na części
 W sekcji „Eksport" pole **„podziel na części"** dzieli gotowy montaż na N osobnych plików (np. kilka odcinków z jednego długiego materiału).
 Tabela pokazuje zakres, długość każdej części oraz długość razem z intro/outro.

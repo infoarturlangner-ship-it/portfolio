@@ -464,8 +464,23 @@ section.tabhide{display:none}
 <div class="row" style="margin-bottom:8px">
  <label>podziel na części</label><input type="number" id="nparts" min="1" max="500" value="1" style="width:70px">
  <label>tnij</label>
- <select id="psnap"><option value="1">przy najbliższym cięciu (części zbliżone długością)</option><option value="0">dokładnie po równo (może w środku ujęcia)</option></select>
+ <select id="psnap"><option value="1">przy najbliższym cięciu (części zbliżone długością)</option><option value="0">dokładnie po równo (może w środku ujęcia)</option><option value="2">wg AI (granice w sensownych momentach, od ChatGPT)</option></select>
  <label><input type="checkbox" id="pall" checked> intro i outro w każdej części</label>
+</div>
+<div id="spbox" style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px">
+ <b>Podział na odcinki wg AI</b>
+ <div class="mut" style="margin:4px 0 8px">ChatGPT wskazuje, gdzie zakończyć każdy odcinek: na puencie, końcu wątku albo naturalnej przerwie. Liczbę odcinków ustawiasz wyżej („podziel na części”). Dla każdej granicy program wyznacza okno poszukiwań (miejsce, w którym wypadłby równy podział, ± kilka minut) i wysyła ChatGPT tylko transkrypcję z tych okien, więc instrukcja jest krótka. Po wczytaniu odpowiedzi tryb „tnij” przełącza się na „wg AI”.</div>
+ <div class="row" style="margin-bottom:6px">
+  <label>transkrypcja</label><select id="spsrc"><option value="1">film 1</option><option value="2">film 2</option><option value="3">oba (z oznaczeniem)</option></select>
+  <label>okno poszukiwań ± (min)</label><input type="number" id="sptol" value="4" min="1" step="1" style="width:60px">
+  <label>po puencie dodaj (s)</label><input type="number" id="sptail" value="1.5" min="0" step="0.5" style="width:60px">
+  <label>kontekst</label><input type="text" id="spctx" placeholder="np. gra Fortnite, luźna rozmowa" style="width:min(260px,100%)">
+ </div>
+ <div class="row" style="margin-bottom:6px"><button id="spgen" class="pri">⬇ Pobierz instrukcję (podział na odcinki)</button><span class="mut" id="spgeninfo"></span></div>
+ <div class="row"><label>odpowiedź ChatGPT (plik)</label><input type="file" id="spin"></div>
+ <div class="row" style="margin-top:6px"><textarea id="sppaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON)" style="height:60px"></textarea></div>
+ <div class="row" style="margin:6px 0"><button id="spload">Wczytaj wklejoną odpowiedź</button><button id="spclear">Wyczyść granice</button><span class="mut" id="spmsg"></span></div>
+ <div class="hitbox" style="max-height:200px"><table id="splist"></table></div>
 </div>
 <div class="mut" style="margin-bottom:8px">Wyłączone „w każdej części" = intro tylko w pierwszej części, outro tylko w ostatniej. Przy 1 części powstaje jeden plik.</div>
 <div class="hitbox" style="max-height:220px;margin-bottom:8px"><table id="partsinfo"></table></div>
@@ -636,13 +651,19 @@ function sfxFilter(evs,base='[0:a]',first=1){
   return {files,graph:parts.join(';')};
 }
 // podział materiału na części: snap = tnij przy najbliższym cięciu, inaczej dokładnie po równo
-function splitSegs(segs,n,snap){
-  n=Math.max(1,Math.min(Math.floor(+n)||1,500));
+// przesunięcie w montażu (suma długości ujęć) <-> czas na osi filmu 1
+function segOffsetOf(segs,t){let off=0;for(const s of segs){if(t<s.a)return off;if(t<s.b)return off+(t-s.a);off+=s.b-s.a}return off}
+function segGlobalAt(segs,off){let c=0;for(const s of segs){const d=s.b-s.a;if(off<c+d)return s.a+(off-c);c+=d}return segs.length?segs[segs.length-1].b:0}
+// times: opcjonalna lista czasów (oś filmu 1), w których kończą się kolejne części (podział wg AI); wtedy n i snap są ignorowane
+function splitSegs(segs,n,snap,times){
+  const useTimes=Array.isArray(times)&&times.length>0&&segs.length>0;
+  n=useTimes?times.length+1:Math.max(1,Math.min(Math.floor(+n)||1,500));
   if(n===1||!segs.length)return segs.length?[segs]:[];
   const total=segs.reduce((a,s)=>a+(s.b-s.a),0),cum=[];let c=0;
   segs.forEach(s=>{c+=s.b-s.a;cum.push(c)});
   const cuts=[];
-  for(let k=1;k<n;k++){
+  if(useTimes)times.forEach(t=>cuts.push(segOffsetOf(segs,t)));
+  else for(let k=1;k<n;k++){
     const target=total*k/n;let pick=target;
     if(snap){let bd=1e18,best=null;for(let i=0;i<cum.length-1;i++){const d=Math.abs(cum[i]-target);if(d<bd){bd=d;best=cum[i]}}if(best!=null)pick=best}
     cuts.push(pick);
@@ -678,7 +699,7 @@ function safeName(s){
   return String(s==null?'':s).replace(/[\u0000-\u001f]/g,'').replace(/[\\/:*?"<>|`$]/g,'-').replace(/\s+/g,' ').replace(/^[\s.]+|[\s.]+$/g,'').slice(0,120).trim();
 }
 function planParts(segs,o){
-  const base=(o.out||'montaz.mp4').replace(/\.mp4$/i,''),parts=splitSegs(segs,o.n,o.snap),used=new Set();
+  const base=(o.out||'montaz.mp4').replace(/\.mp4$/i,''),parts=splitSegs(segs,o.n,o.snap,o.times),used=new Set();
   return parts.map((ps,i)=>{
     const hasIntro=!!o.intro&&(o.all||i===0),hasOutro=!!o.outro&&(o.all||i===parts.length-1);
     const tz=o.teasers&&o.teasers[i],teaser=tz&&tz.b>tz.a?clipSegs(segs,tz.a,tz.b):[];
@@ -1364,6 +1385,42 @@ function genWeekScript(o){
     mixCmd,`rm -f ${T}_all.mkv`,`rm -rf ${T}`,`echo "Gotowe: ${out.replace(/["$`\\]/g,'')}"`];
   return{script:L.join('\n'),clips,total,flatCount:flat.length};
 }
+// ============ Podział na odcinki wg AI: granice w sensownych momentach (puenta, koniec wątku) ============
+function buildSplitPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,n=2,expected=[],tolSec=240,avgSec=0,ctx=''}){
+  const both=src==='3',lines=[];
+  if(src!=='2')lines1.forEach(l=>lines.push({t:l.t0,text:l.text,tag:'F1'}));
+  if(src!=='1')lines2.forEach(l=>lines.push({t:l.t0-offset,text:l.text,tag:'F2'}));
+  lines.sort((a,b)=>a.t-b.t);
+  const L=['# Zadanie: podział nagrania na odcinki w sensownych miejscach','',
+   `Poniżej jest transkrypcja materiału z gry (rozmowa dwóch osób). Materiał ma zostać podzielony na ${n} odcinków (czyli trzeba wskazać ${n-1} miejsc podziału). Odcinki mają mieć zbliżoną długość (średnio ok. ${Math.round(avgSec/60)} min), ale **każdy odcinek ma kończyć się w sensownym momencie**: na puencie, żarcie, zakończeniu wątku lub akcji, po mocnym zdaniu albo w naturalnej przerwie rozmowy. Następny odcinek powinien zaczynać się naturalnie.`,''];
+  if(String(ctx||'').trim())L.push('Kontekst: '+String(ctx).trim(),'');
+  L.push('## Zasady',
+   `- Dla każdej granicy podałem okno poszukiwań (oczekiwane miejsce ± ${Math.round(tolSec/60)} min). Wybierz **jeden** moment w tym oknie, który najlepiej nadaje się na koniec odcinka.`,
+   '- Nie tnij w środku zdania, żartu ani akcji. Szukaj miejsca tuż po puencie, śmiechu, zakończeniu tematu lub dłuższej przerwie w rozmowie.',
+   '- Podaj czas **końca** odcinka, czyli chwilę tuż po ostatnim zdaniu (z linii transkrypcji, na której kończy się wątek; możesz dodać ułamek sekundy).',
+   '- Czasy są na osi czasu montażu (format g:mm:ss). Czasy w napisach są zgrubne (±1–2 s).',
+   '- Do każdej granicy dopisz krótki powód wyboru.','',
+   '## Format odpowiedzi',
+   'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), w tej strukturze, dokładnie '+(n-1)+' wpisów w kolejności czasowej:','',
+   '```json','{ "podzial": [',`  { "koniec": "${fmtHMS(expected[0]||inT+avgSec)}", "powod": "puenta po zakończeniu akcji" }`,'] }','```','',
+   '## Transkrypcja (okna poszukiwań)','');
+  expected.forEach((ex,k)=>{
+    const a=Math.max(inT,ex-tolSec),b=Math.min(outT,ex+tolSec);
+    L.push(`### Granica ${k+1} z ${n-1}: szukaj między ${fmtHMS(a)} a ${fmtHMS(b)} (oczekiwane miejsce ok. ${fmtHMS(ex)})`,'');
+    lines.filter(l=>l.t>=a&&l.t<b).forEach(l=>L.push(`[${fmtHMS(l.t)}] ${both?l.tag+': ':''}${l.text}`));
+    L.push('');
+  });
+  return L.join('\n');
+}
+function parseSplitJson(text){
+  const m=String(text).match(/\{[\s\S]*\}|\[[\s\S]*\]/);if(!m)throw new Error('nie znalazłem JSON-a');
+  const j=JSON.parse(m[0]);
+  const list=Array.isArray(j)?j:(j.podzial||j['podział']||j.split||j.granice||j.cuts||[]);
+  const tt=v=>typeof v==='number'?v:parseTime(v);
+  const out=list.map(x=>{const t=(typeof x==='object'&&x!==null)?tt(x.koniec??x.t??x.czas??x.end??x.time):tt(x);return{t,why:(x&&x.powod)||(x&&x.reason)||''}}).filter(x=>isFinite(x.t)&&x.t>0);
+  if(!out.length)throw new Error('JSON nie zawiera punktów podziału (koniec)');
+  return out.sort((a,b)=>a.t-b.t);
+}
 // ============ Montaż AI: dopasowanie transkrypcji obu filmów i instrukcja dla ChatGPT ============
 const aiStem=w=>w.slice(0,5);
 function normWords(s){
@@ -1605,7 +1662,7 @@ function genEDL(segs,o){
 
 const $=id=>document.getElementById(id);
 const v1=$('v1'),v2=$('v2');
-const S={cutMode:'kw',ai:{sw:[]},teasers:[],cuts:[],stopAt:null,fxName:'',fxUrl:null,fxOK:false,txName:'',txOK:false,ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'src',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
+const S={cutMode:'kw',ai:{sw:[]},split:{times:[]},teasers:[],cuts:[],stopAt:null,fxName:'',fxUrl:null,fxOK:false,txName:'',txOK:false,ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'src',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
 const fmt=t=>{const s=Math.abs(t),hh=Math.floor(s/3600),mm=Math.floor(s/60)%60,ss=(s%60).toFixed(2).padStart(5,'0');return (t<0?'-':'')+(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+ss};
 const tv=id=>parseTime($(id).value);
 // koniec zakresu dla instrukcji ChatGPT: puste „do” (albo „do” ≤ „od”) = do końca materiału
@@ -1794,7 +1851,7 @@ function loadExtra(kind,file){
 }
 $('fintro').onchange=e=>loadExtra('intro',e.target.files[0]);
 $('foutro').onchange=e=>loadExtra('outro',e.target.files[0]);
-const planOpts=()=>{const o=opts();return{n:+$('nparts').value||1,snap:$('psnap').value==='1',all:$('pall').checked,intro:o.intro,outro:o.outro,out:o.out,rules:S.rules,defSfx:o.defSfx,
+const planOpts=()=>{const o=opts();return{n:+$('nparts').value||1,snap:$('psnap').value!=='0',times:($('psnap').value==='2'&&S.split.times.length)?S.split.times.map(x=>x.t):null,all:$('pall').checked,intro:o.intro,outro:o.outro,out:o.out,rules:S.rules,defSfx:o.defSfx,
   teasers:S.teasers.map(t=>({a:parseTime(t.a),b:parseTime(t.b)})),titles:S.teasers.map(t=>t.title||'')}};
 function renderTeaserRows(n){
   while(S.teasers.length<n)S.teasers.push({a:'',b:''});
@@ -1845,7 +1902,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({ai:{sw:S.ai.sw,mode:S.cutMode,set:Object.fromEntries(['ain1','ain2','aimin','ailead','aichunk','aictx'].map(k=>[k,$(k).value]))},vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({split:{times:S.split.times,set:Object.fromEntries(['spsrc','sptol','sptail','spctx'].map(k=>[k,$(k).value]))},ai:{sw:S.ai.sw,mode:S.cutMode,set:Object.fromEntries(['ain1','ain2','aimin','ailead','aichunk','aictx'].map(k=>[k,$(k).value]))},vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1857,6 +1914,7 @@ $('load').onchange=async e=>{
   if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
+  if(p.split){S.split.times=(p.split.times||[]).map(x=>({t:+x.t,why:x.why||''})).filter(x=>isFinite(x.t));for(const [k,v] of Object.entries(p.split.set||{})){if($(k))$(k).value=v}renderSplit()}
   if(p.ai){S.ai.sw=aiNormalize((p.ai.sw||[]).map(s=>({t:+s.t,cam:+s.cam})).filter(s=>isFinite(s.t)&&(s.cam===1||s.cam===2)));for(const [k,v] of Object.entries(p.ai.set||{})){if($(k))$(k).value=v}S.cutMode=(p.ai.mode==='ai'&&S.ai.sw.length)?'ai':'kw';document.querySelector(`[name=cutmode][value=${S.cutMode}]`).checked=true;renderAi()}
   S.vtr=(p.vtr||[]).map(r=>({q:r.q||'',qsrc:r.qsrc||'1',name:r.name||'',len:+r.len||5,nofile:!!r.name}));renderVtr();
   if(p.sh){S.shorts=(p.sh.shorts||[]).map(s=>({a:s.a||'',b:s.b||'',title:s.title||'',outro:s.outro!==false,lines:(s.lines||[]).map(l=>({t:l.t||'',text:l.text||''}))}));S.shmus=p.sh.mus||'';S.shframe=p.sh.frame||'';S.shoutro=p.sh.outro||'';S.shspans=[];S.shfiles=[];for(const [k,v] of Object.entries(p.sh.set||{})){if($(k))$(k).value=v}for(const id of['shduck','shthr'])$(id+'v').textContent=$(id).value;renderShorts()}
@@ -2269,6 +2327,56 @@ $('wdltest').onclick=()=>{try{const o=weekOpts(25);o.tmp='_segweektest';o.out=o.
 renderWeek();
 
 // ============ Shorty ============
+// ============ Podział na odcinki wg AI (UI) ============
+function renderSplit(){
+  const tb=$('splist');if(!tb)return;
+  tb.innerHTML='<tr><th>granica</th><th>koniec odcinka</th><th>powód (ChatGPT)</th><th></th><th></th></tr>';
+  S.split.times.forEach((x,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td><input type="text" class="st" style="width:100px"></td><td class="mut">${String(x.why||'').replace(/</g,'&lt;')}</td><td><button class="sp">▶</button></td><td><button class="sx">✕</button></td>`;
+    const st=tr.querySelector('.st');st.value=fmtHMS(x.t);
+    st.onchange=()=>{x.t=parseTime(st.value);S.split.times.sort((a,b)=>a.t-b.t);renderSplit();syncSplit()};
+    tr.querySelector('.sp').onclick=()=>previewRange(Math.max(0,x.t-8),x.t+3,false);
+    tr.querySelector('.sx').onclick=()=>{S.split.times.splice(i,1);renderSplit();syncSplit()};
+    tb.appendChild(tr);
+  });
+}
+function syncSplit(){
+  if(S.split.times.length){$('nparts').value=S.split.times.length+1}
+  renderExport();
+}
+function splitExpected(n){
+  const total=S.segs.reduce((a,s)=>a+s.b-s.a,0),ex=[];
+  for(let k=1;k<n;k++)ex.push(segGlobalAt(S.segs,total*k/n));
+  return{ex,total};
+}
+$('spgen').onclick=()=>{
+  const n=+$('nparts').value||1;
+  if(!S.segs.length){alert('Najpierw ustaw montaż (filmy, zakres „od–do”).');return}
+  if(n<2){alert('Ustaw liczbę odcinków („podziel na części”) na co najmniej 2.');return}
+  const src=$('spsrc').value,l1=src==='2'?[]:(S.l1||[]),l2=src==='1'?[]:(S.l2||[]);
+  if(!l1.length&&!l2.length){alert('Wczytaj transkrypcję wybranego filmu (sekcja 1).');return}
+  const {ex,total}=splitExpected(n);
+  const txt=buildSplitPrompt({lines1:l1,lines2:l2,offset:offset(),src,inT:tv('tin'),outT:rangeOut(),n,expected:ex,tolSec:num($('sptol').value,4)*60,avgSec:total/n,ctx:$('spctx').value});
+  if(!promptLines(txt)){alert('W oknach poszukiwań nie ma żadnej linii transkrypcji. Sprawdź zakres i wybór transkrypcji.');return}
+  dl('instrukcja_chatgpt_podzial.txt',txt);
+  $('spgeninfo').textContent=` ${n-1} granic · ${txt.length.toLocaleString('pl-PL')} znaków (ok. ${Math.round(txt.length/3.2/1000)} tys. tokenów) · linii transkrypcji: ${promptLines(txt)}`;
+};
+function loadSplitText(txt){
+  try{
+    const tail=num($('sptail').value,1.5),list=parseSplitJson(txt),inT=tv('tin'),outT=rangeOut();
+    const times=list.map(x=>({t:x.t+tail,why:x.why})).filter(x=>x.t>inT&&x.t<outT);
+    if(!times.length)throw new Error('żaden punkt podziału nie mieści się w zakresie „od–do”');
+    S.split.times=times;$('psnap').value='2';renderSplit();syncSplit();
+    const n=+$('nparts').value;
+    $('spmsg').textContent=` Wczytano granic: ${times.length}, odcinków: ${times.length+1}. Tryb „tnij” ustawiono na „wg AI”.`+(list.length!==times.length?` Pominięto ${list.length-times.length} poza zakresem.`:'');
+  }catch(e){$('spmsg').textContent=' Nie udało się wczytać: '+e.message}
+}
+$('spin').onchange=async e=>{const f=e.target.files[0];if(f)loadSplitText(await f.text());e.target.value=''};
+$('spload').onclick=()=>loadSplitText($('sppaste').value);
+$('spclear').onclick=()=>{S.split.times=[];if($('psnap').value==='2')$('psnap').value='1';renderSplit();renderExport();$('spmsg').textContent=' Granice wyczyszczone.'};
+renderSplit();
+
 // ============ Montaż AI (UI) ============
 function aiReq(){
   const inT=tv('tin'),outT=tv('tout'),fin=v=>isFinite(v.duration)&&v.duration>0;
