@@ -161,6 +161,7 @@ section.tabhide{display:none}
  <label>min. długość ujęcia (s)</label><input type="number" id="aimin" value="3" min="0.5" step="0.5" style="width:60px">
  <label>wyprzedzenie cięcia (s)</label><input type="number" id="ailead" value="0.3" min="0" step="0.1" style="width:60px">
  <label>długość części (min)</label><input type="number" id="aichunk" value="20" min="2" step="1" style="width:60px">
+ <label>maks. czas jednej kamery bez zmiany (s)</label><input type="number" id="aimax" value="35" min="10" step="5" style="width:60px">
 </div>
 <div class="row" style="margin-bottom:8px"><label>kontekst (opcjonalnie)</label><input type="text" id="aictx" placeholder="np. gra Fortnite, dwóch graczy, luźna rozmowa po polsku" style="width:min(520px,100%)"></div>
 <div class="row" style="margin-bottom:6px"><button id="aigen" class="pri">⬇ Pobierz wszystkie instrukcje</button><span class="mut" id="aigeninfo"></span></div>
@@ -171,7 +172,11 @@ section.tabhide{display:none}
 <div class="row" style="margin-top:6px"><textarea id="aipaste" placeholder="…albo wklej tutaj odpowiedź ChatGPT (JSON); każde kliknięcie dodaje kolejną część" style="height:70px"></textarea></div>
 <div class="row" style="margin:6px 0 12px"><button id="aiload">Dodaj wklejoną odpowiedź</button><button id="aiclear">Wyczyść listę</button><button id="aiuse" class="pri">Użyj montażu AI</button><span class="mut" id="aimsg"></span></div>
 
-<b>3. Lista przełączeń</b> <span class="mut">(możesz poprawiać czas i kamerę, dodawać i usuwać)</span>
+<b>3. Uzupełnij statyczne fragmenty i wyrównaj kamery</b>
+<div class="mut" style="margin:4px 0 8px">Gdzie jedna kamera jest pokazywana zbyt długo (powyżej „maks. czasu”, ok. 35 s) program dokłada przerywniki drugiej kamery, najchętniej na początku wypowiedzi. Dobiera przy tym odstęp (w granicach ok. ±10 s od ustawionego) i długość przerywników tak, żeby czas obu kamer w całym montażu był sprawiedliwy (ok. 50/50, tolerancja ±5 punktów). Nie zmienia przełączeń wynikających z fabuły.</div>
+<div class="row" style="margin-bottom:8px"><button id="aifill" class="pri">Uzupełnij i wyrównaj</button><button id="aifillundo">Cofnij uzupełnienie</button><span class="mut" id="aifillmsg"></span></div>
+
+<b>4. Lista przełączeń</b> <span class="mut">(możesz poprawiać czas i kamerę, dodawać i usuwać)</span>
 <div class="hitbox" style="max-height:340px;margin:6px 0"><table id="aitab"></table></div>
 <div class="row" style="margin-bottom:8px"><button id="aiadd">+ dodaj przełączenie</button><span class="mut" id="aiinfo"></span></div>
 </section>
@@ -489,6 +494,8 @@ section.tabhide{display:none}
  <button id="copy" class="pri">Kopiuj skrypt</button>
  <button id="dlsh">Pobierz render.sh</button>
  <button id="dledl">Pobierz EDL (DaVinci)</button>
+<div class="row" style="margin-bottom:8px"><label style="color:var(--txt)"><input type="checkbox" id="rememberf" checked> zapamiętuj wczytane pliki w tej przeglądarce (także filmy), żeby po wczytaniu projektu nie wczytywać ich ponownie</label><button id="clrfiles">Wyczyść zapamiętane pliki</button><span class="mut" id="fstat"></span></div>
+<div class="mut" style="margin-bottom:8px">Pliki są kopiowane do pamięci tej przeglądarki (zajmują tyle miejsca na dysku, ile same pliki, także filmy). Zapisany projekt (plik .json) przechowuje listę plików, a ich zawartość odtwarza ta sama przeglądarka. Na innym komputerze lub po wyczyszczeniu danych przeglądarki pliki trzeba wczytać ponownie.</div>
  <button id="save">Zapisz projekt</button>
  <label>wczytaj projekt <input type="file" id="load" accept=".json"></label>
 </div>
@@ -1465,7 +1472,7 @@ function aiChunks(inT,outT,chunkSec){
   for(let a=inT;a<outT-1e-6;a+=c)out.push({a,b:Math.min(outT,a+c)});
   return out;
 }
-function buildAiCutPrompt({entries=[],a,b,idx=1,total=1,n1='',n2='',minShot=3,ctx=''}){
+function buildAiCutPrompt({entries=[],a,b,idx=1,total=1,n1='',n2='',minShot=3,ctx='',maxStatic=35}){
   const nm=(n,i)=>String(n||'').trim()?`osoba „${String(n).trim()}”`:`osoba z kamery ${i}`;
   const L=['# Zadanie: montaż kamer (przełączanie między dwiema kamerami)','',
    `Jesteś montażystą. Dwie osoby grają razem i rozmawiają, a każda ma własne nagranie: **film 1** = ${nm(n1,1)}, **film 2** = ${nm(n2,2)}. Mam transkrypcje obu nagrań, połączone na wspólnej osi czasu. Zdecyduj, w których momentach przełączyć widok między kamerą 1 a kamerą 2, aby montaż pokazywał to, co w rozmowie najważniejsze. To jest fragment ${idx} z ${total} (od ${fmtHMS(a)} do ${fmtHMS(b)}); podaj przełączenia tylko dla tego fragmentu.`,''];
@@ -1484,6 +1491,8 @@ function buildAiCutPrompt({entries=[],a,b,idx=1,total=1,n1='',n2='',minShot=3,ct
    `- Minimalna długość ujęcia to ${minShot} s: nie przełączaj częściej. Krótkie wtrącenia (poniżej ${minShot} s) zignoruj i zostań przy bieżącej kamerze.`,
    '- Nie przełączaj bez potrzeby: gdy nie ma wyraźnego powodu, zostań na bieżącej kamerze. Gdy nie ma linii transkrypcji (cisza), też zostań.',
    '- Podawaj czas początku wypowiedzi, od której ma obowiązywać nowa kamera. Program doda krótkie wyprzedzenie.',
+   `- **Brak statyczności:** gdy w rozmowie nic się nie dzieje i fabularnie nie ma powodu do przełączenia, i tak przełącz kamerę mniej więcej co ${maxStatic} s (w naturalnej przerwie lub przy zmianie tematu), żeby obraz nie był statyczny. Ten odstęp możesz skrócić lub wydłużyć (ok. ${Math.max(15,maxStatic-10)}–${maxStatic+10} s), jeśli pomaga to w sprawiedliwym podziale. Żadna kamera nie powinna być pokazywana bez przerwy dłużej niż ok. ${maxStatic+10} s.`,
+   '- **Sprawiedliwy podział:** w całym montażu kamera 1 i kamera 2 mają mieć zbliżony czas ekranowy (ok. 50/50, odchylenie najwyżej ok. 10 punktów procentowych). W tym fragmencie również dąż do ok. 50/50: gdy jedna osoba mówi znacznie więcej, wstawiaj ujęcia drugiej osoby (reakcje, krótkie przerywniki), a gdy fabuła nie wymusza kamery, wybieraj tę, która była pokazywana krócej.',
    '- Wypisuj tylko **zmiany** kamery. Pierwszy wpis ma czas początku fragmentu i wskazuje kamerę startową (wybierz sensownie, nie znasz poprzedniego fragmentu).','',
    '## Format odpowiedzi',
    'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), w tej strukturze. Czasy jako tekst „g:mm:ss”, a kamera jako liczba 1 lub 2:','',
@@ -1501,6 +1510,46 @@ function parseAiJson(text){
     .filter(x=>isFinite(x.t)&&(x.cam===1||x.cam===2));
   if(!out.length)throw new Error('JSON nie zawiera przełączeń (t, kamera)');
   return out;
+}
+// Uzupełnianie montażu AI: dzieli zbyt długie ujęcia przerywnikami drugiej kamery i wyrównuje czas kamer (ok. 50/50)
+function aiFill(sw,inT,outT,{maxSec=35,minShot=3,cutMin=4,cutMax=12,times=[]}={}){
+  const all=aiNormalize(sw),before=all.filter(x=>x.t<=inT);
+  const startCam=before.length?before[before.length-1].cam:(all[0]?all[0].cam:1);
+  const shots=[];let cur=startCam,start=inT;
+  for(const x of all.filter(x=>x.t>inT&&x.t<outT)){if(x.cam===cur)continue;shots.push({a:start,b:x.t,cam:cur});cur=x.cam;start=x.t}
+  shots.push({a:start,b:outT,cam:cur});
+  const stat=ps=>{let c1=0,mx=0;ps.forEach(s=>{const d=s.b-s.a;if(s.cam===1)c1+=d;mx=Math.max(mx,d)});const tot=ps.reduce((a,s)=>a+s.b-s.a,0)||1;return{c1:c1/tot,mx}};
+  const build=(m,dLen)=>{
+    const out=[];
+    for(const s of shots){
+      const L=s.b-s.a;if(L<=m){out.push({...s});continue}
+      const other=s.cam===1?2:1,d=dLen[other];let k=Math.ceil(L/m)-1;
+      while(k>0&&(L-k*d)/(k+1)<minShot)k--;
+      if(k===0){out.push({...s});continue}
+      const p=(L-k*d)/(k+1);let t=s.a;
+      for(let i=0;i<=k;i++){out.push({a:t,b:t+p,cam:s.cam});t+=p;if(i<k){out.push({a:t,b:t+d,cam:other,ins:true});t+=d}}
+    }
+    return out;
+  };
+  // wybór parametrów: odstęp m (w pobliżu maxSec) i długości przerywników tak, aby czas kamer był jak najbliżej 50/50
+  let best=null;
+  for(let m=10;m<=maxSec+10;m+=2.5)for(let d1=cutMin;d1<=cutMax;d1+=1)for(let d2=cutMin;d2<=cutMax;d2+=1){
+    const ps=build(m,{1:d1,2:d2}),st=stat(ps),score=Math.max(0,Math.abs(st.c1-0.5)-0.05)*100+Math.abs(m-maxSec)*0.08+ps.length*0.05;
+    if(!best||score<best.score)best={score,m,d1,d2,ps};
+  }
+  const ps=best.ps;
+  // przesuń początki przerywników do najbliższego początku wypowiedzi (±3 s), z zachowaniem min. długości ujęć
+  if(times&&times.length){
+    for(let j=1;j<ps.length-1;j++){
+      const c=ps[j];if(!c.ins)continue;const pj=ps[j-1],nj=ps[j+1],d=c.b-c.a;
+      let bt=null,bd=3.0001;
+      for(const tm of times){const dd=Math.abs(tm-c.a);if(dd<bd&&tm-pj.a>=minShot&&nj.b-(tm+d)>=minShot){bd=dd;bt=tm}}
+      if(bt!=null){pj.b=bt;c.a=bt;c.b=bt+d;nj.a=bt+d}
+    }
+  }
+  const outSw=[];ps.forEach(s=>{if(outSw.length&&outSw[outSw.length-1].cam===s.cam)return;outSw.push({t:s.a,cam:s.cam})});
+  const b0=(()=>{const st=stat(shots);return st})(),a1=stat(ps);
+  return{sw:outSw,before:{share1:b0.c1,max:b0.mx,shots:shots.length},after:{share1:a1.c1,max:a1.mx,shots:ps.length},m:best.m,d1:best.d1,d2:best.d2,added:ps.filter(s=>s.ins).length};
 }
 // przełączenia -> trafienia dla buildSegments (rule -1 = domyślny dźwięk cięcia)
 function aiHits(sw,lead=0){
@@ -1902,7 +1951,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({split:{times:S.split.times,set:Object.fromEntries(['spsrc','sptol','sptail','spctx'].map(k=>[k,$(k).value]))},ai:{sw:S.ai.sw,mode:S.cutMode,set:Object.fromEntries(['ain1','ain2','aimin','ailead','aichunk','aictx'].map(k=>[k,$(k).value]))},vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({...fileProjectState(),split:{times:S.split.times,set:Object.fromEntries(['spsrc','sptol','sptail','spctx'].map(k=>[k,$(k).value]))},ai:{sw:S.ai.sw,mode:S.cutMode,set:Object.fromEntries(['ain1','ain2','aimin','ailead','aichunk','aictx','aimax'].map(k=>[k,$(k).value]))},vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1927,7 +1976,7 @@ $('load').onchange=async e=>{
   if(p.nparts!=null)$('nparts').value=p.nparts;if(p.psnap!=null)$('psnap').value=p.psnap;if(p.pall!=null)$('pall').checked=p.pall;
   for(const k of['start','minshot','tin','tout','fps','W','H','ofps','enc','outn'])if(p[k]!=null)$(k).value=p[k];
   S.manual=!!p.manual;S.off=new Set(p.off||[]);if(p.f1)S.f1=p.f1;if(p.f2)S.f2=p.f2;
-  recompute();alert('Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,p.defsfx&&p.defsfx.name,p.intromusic&&p.intromusic.name,p.mnames&&p.mnames.musicName,p.mnames&&p.mnames.fontMain&&('czcionka: '+p.mnames.fontMain),p.mnames&&p.mnames.fontMom&&('czcionka: '+p.mnames.fontMom),...(p.rules||[]).map(r=>r.sfx)].filter(Boolean).join(', ')+').');
+  recompute();{const need=[p.f1,p.f2,p.introF,p.outroF,p.fxName,p.txName,p.defsfx&&p.defsfx.name,p.intromusic&&p.intromusic.name,p.mnames&&p.mnames.musicName,p.mnames&&p.mnames.fontMain&&('czcionka: '+p.mnames.fontMain),p.mnames&&p.mnames.fontMom&&('czcionka: '+p.mnames.fontMom),...(p.rules||[]).map(r=>r.sfx)].filter(Boolean),rr=await restoreProjectFiles(p),miss=need.filter(n=>!rr.names.has(n));alert(rr.count&&!miss.length?`Projekt wczytany. Pliki odtworzono z pamięci przeglądarki (${rr.count}).`:(rr.count?`Projekt wczytany. Odtworzono z pamięci przeglądarki: ${rr.count} plików. Wczytaj ponownie pliki (nazwy w projekcie): ${miss.join(', ')}.`:'Projekt wczytany. Wczytaj ponownie pliki wideo, transkrypcje, intro/outro i dźwięki (nazwy w projekcie: '+need.join(', ')+').'))}
 };
 function stageRatio(){const w=+$('W').value||1920,hh=+$('H').value||1080;$('stage').style.aspectRatio=S.mode==='mon'?(w+'/'+hh):''}
 ['W','H'].forEach(id=>$(id).addEventListener('input',stageRatio));
@@ -2389,7 +2438,7 @@ function aiReq(){
 }
 function aiParts(){
   const inT=tv('tin'),outT=tv('tout'),entries=matchTranscripts(S.l1,S.l2,offset(),{inT,outT}),ch=aiChunks(inT,outT,num($('aichunk').value,20)*60);
-  const parts=ch.map((c,i)=>({...c,idx:i+1,text:buildAiCutPrompt({entries:entries.filter(e=>e.t>=c.a&&e.t<c.b),a:c.a,b:c.b,idx:i+1,total:ch.length,n1:$('ain1').value,n2:$('ain2').value,minShot:num($('aimin').value,3),ctx:$('aictx').value})}));
+  const parts=ch.map((c,i)=>({...c,idx:i+1,text:buildAiCutPrompt({entries:entries.filter(e=>e.t>=c.a&&e.t<c.b),a:c.a,b:c.b,idx:i+1,total:ch.length,n1:$('ain1').value,n2:$('ain2').value,minShot:num($('aimin').value,3),ctx:$('aictx').value,maxStatic:num($('aimax').value,35)})}));
   return{entries,parts};
 }
 function aiRefresh(){
@@ -2462,7 +2511,17 @@ $('aiuse').onclick=()=>{
   if(!S.ai.sw.length){$('aimsg').textContent=' Najpierw wczytaj odpowiedzi ChatGPT.';return}
   setCutMode('ai');$('aimsg').textContent=' Włączono montaż AI (tryb można zmienić w zakładce „Słowa i cięcia”).'+aiCoverage();
 };
-['ain1','ain2','aimin','ailead','aichunk','aictx'].forEach(id=>$(id).addEventListener('input',()=>{if(id==='aimin'||id==='ailead')recompute()}));
+['ain1','ain2','aimin','ailead','aichunk','aictx','aimax'].forEach(id=>$(id).addEventListener('input',()=>{if(id==='aimin'||id==='ailead')recompute()}));
+$('aifill').onclick=()=>{
+  if(!S.ai.sw.length){$('aifillmsg').textContent=' Najpierw wczytaj odpowiedzi ChatGPT.';return}
+  const inT=tv('tin'),outT=tv('tout');if(!(outT>inT)){$('aifillmsg').textContent=' Ustaw zakres „od–do”.';return}
+  const times=matchTranscripts(S.l1,S.l2,offset(),{inT,outT}).map(e=>e.t);
+  const r=aiFill(S.ai.sw,inT,outT,{maxSec:num($('aimax').value,35),minShot:num($('aimin').value,3),times});
+  S.ai.prev=S.ai.sw.map(x=>({...x}));S.ai.sw=r.sw;renderAi();recompute();
+  const pc=x=>Math.round(x*100);
+  $('aifillmsg').textContent=` Przed: kamera 1 ${pc(r.before.share1)}% / kamera 2 ${100-pc(r.before.share1)}%, najdłuższe ujęcie ${r.before.max.toFixed(0)} s, ${r.before.shots} ujęć. Po: ${pc(r.after.share1)}% / ${100-pc(r.after.share1)}%, najdłuższe ${r.after.max.toFixed(0)} s, ${r.after.shots} ujęć. Dodano przerywników: ${r.added} (odstęp ${r.m} s, przerywniki kamery 1: ${r.d1} s, kamery 2: ${r.d2} s).`;
+};
+$('aifillundo').onclick=()=>{if(!S.ai.prev){$('aifillmsg').textContent=' Nie ma czego cofnąć.';return}S.ai.sw=S.ai.prev;S.ai.prev=null;renderAi();recompute();$('aifillmsg').textContent=' Cofnięto uzupełnienie.'};
 renderAi();
 
 S.shorts=[];S.shspans=[];S.shfiles=[];S.shmus='';S.shframe='';S.shoutro='';
@@ -2675,6 +2734,89 @@ $('shpvgo').onclick=()=>shPreview(+$('shpvsel').value||0);
 $('shpvstop').onclick=()=>shEnd('Zatrzymano.');
 $('shpvinfo').style.whiteSpace='pre-line';
 shDrawFrame();
+
+// ============ Pamięć wczytanych plików (IndexedDB) ============
+const FILE_SKIP=new Set(['load','aiin','gptin','min','win','shin','spin']);   // pliki z danymi (odpowiedzi ChatGPT, projekt) zapisują się w samym projekcie
+const fid=m=>`${m.name}|${m.size}|${m.lastModified}`;
+const FDB={
+  db:null,
+  open(){return this.db?Promise.resolve(this.db):new Promise((res,rej)=>{
+    let rq;try{rq=indexedDB.open('montaz_files',1)}catch(e){rej(e);return}
+    rq.onupgradeneeded=()=>rq.result.createObjectStore('files');
+    rq.onsuccess=()=>{this.db=rq.result;res(this.db)};rq.onerror=()=>rej(rq.error);
+  })},
+  async tx(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('files',mode),st=t.objectStore('files');let out;try{out=fn(st)}catch(e){rej(e);return}t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})},
+  get(k){return this.tx('readonly',st=>st.get(k))},
+  has(k){return this.tx('readonly',st=>st.count(k)).then(n=>n>0)},
+  put(k,v){return this.tx('readwrite',st=>st.put(v,k))},
+  clear(){return this.tx('readwrite',st=>st.clear())},
+  keys(){return this.tx('readonly',st=>st.getAllKeys())}
+};
+S.fmeta={};S.restoring=false;
+function fileKeyOf(el){return el.id||null}
+async function fileStat(msg){
+  const el=$('fstat');if(!el)return;
+  try{
+    const keys=await FDB.keys();let est='';
+    if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();est=` · zajęte miejsce przeglądarki: ${(e.usage/1048576).toFixed(0)} MB`}
+    el.textContent=(msg?msg+' · ':'')+`zapamiętane pliki: ${keys.length}`+est;
+  }catch(e){el.textContent=(msg||'')+' (pamięć plików niedostępna w tej przeglądarce)'}
+}
+document.addEventListener('change',async e=>{
+  const el=e.target;if(!(el instanceof HTMLInputElement)||el.type!=='file'||S.restoring||FILE_SKIP.has(el.id))return;
+  const files=[...el.files];if(!files.length)return;
+  files.forEach(f=>{S.fmeta[f.name]={name:f.name,size:f.size,lastModified:f.lastModified}});
+  if(!$('rememberf').checked)return;
+  for(const f of files){
+    try{
+      const k=fid({name:f.name,size:f.size,lastModified:f.lastModified});
+      if(!(await FDB.has(k))){fileStat(`zapamiętuję ${f.name}…`);await FDB.put(k,f)}
+    }catch(err){fileStat(`nie udało się zapamiętać ${f.name} (${err&&err.name||'błąd'}, brak miejsca?)`);return}
+  }
+  fileStat('zapamiętano');
+},true);
+$('rememberf').onchange=()=>{try{localStorage.setItem('montaz_remember',$('rememberf').checked?'1':'0')}catch(e){}};
+try{if(localStorage.getItem('montaz_remember')==='0')$('rememberf').checked=false}catch(e){}
+$('clrfiles').onclick=async()=>{if(!confirm('Usunąć wszystkie pliki zapamiętane w tej przeglądarce? (Pliki na dysku zostają.)'))return;try{await FDB.clear();S.fmeta={};fileStat('wyczyszczono')}catch(e){fileStat('nie udało się wyczyścić')}};
+function setInputFiles(el,files){const dt=new DataTransfer();files.forEach(f=>dt.items.add(f));el.files=dt.files}
+// stan pól plików do projektu: pola statyczne (po id) i metadane wszystkich plików z tej sesji
+function fileProjectState(){
+  const inputs={};
+  document.querySelectorAll('input[type=file]').forEach(el=>{
+    if(!el.id||FILE_SKIP.has(el.id)||!el.files||!el.files.length)return;
+    inputs[el.id]=[...el.files].map(f=>({name:f.name,size:f.size,lastModified:f.lastModified}));
+  });
+  Object.values(inputs).forEach(l=>l.forEach(m=>{S.fmeta[m.name]=m}));
+  return{fileInputs:inputs,fileMeta:S.fmeta};
+}
+async function restoreOne(meta){
+  if(!meta)return null;
+  try{const blob=await FDB.get(fid(meta));if(!blob)return null;return new File([blob],meta.name,{type:blob.type||'',lastModified:meta.lastModified})}catch(e){return null}
+}
+async function restoreProjectFiles(p){
+  const names=new Set(),meta=p.fileMeta||{};let n=0;
+  S.restoring=true;
+  try{
+    for(const [id,list] of Object.entries(p.fileInputs||{})){
+      const el=document.getElementById(id);if(!el||FILE_SKIP.has(id))continue;
+      const files=[];for(const m of list){const f=await restoreOne(m);if(f){files.push(f);names.add(f.name)}}
+      if(files.length){setInputFiles(el,files);el.dispatchEvent(new Event('change',{bubbles:true}));n+=files.length}
+    }
+    const dyn=async(sel,idx,name)=>{
+      if(!name)return;const row=document.querySelectorAll(sel)[idx];if(!row)return;
+      const inp=row.querySelector('input[type=file]');if(!inp)return;
+      const f=await restoreOne(meta[name]);if(!f)return;
+      setInputFiles(inp,[f]);inp.dispatchEvent(new Event('change',{bubbles:true}));names.add(name);n++;
+    };
+    for(let i=0;i<S.rules.length;i++)await dyn('#rules > .rule',i,S.rules[i].sfx);
+    for(let i=0;i<S.ov.length;i++)await dyn('#ovlist > .ovrow',i,S.ov[i].name);
+    for(let i=0;i<S.vtr.length;i++)await dyn('#vtrlist > .row',i,S.vtr[i].name);
+  }finally{S.restoring=false}
+  Object.assign(S.fmeta,meta);
+  fileStat(n?`odtworzono ${n} plików`:'');
+  return{names,count:n};
+}
+fileStat('');
 
 // ============ zakładki ============
 const TABS=[['files','Pliki'],['preview','Podgląd i markery'],['words','Słowa i cięcia'],['ai','Montaż AI'],['fx','Grafiki i efekty'],['teaser','Zajawka'],['moments','Najlepsze momenty'],['week','W tym tygodniu'],['shorts','Shorty'],['export','Eksport i skrypt']];

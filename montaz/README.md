@@ -201,7 +201,13 @@ Zakładka „Montaż AI” jest aktywna po wczytaniu obu filmów i obu transkryp
 3. **Lista przełączeń** jest edytowalna (czas, kamera, podgląd, usuwanie, dodawanie). Parametr „wyprzedzenie cięcia” (domyślnie 0,3 s) przesuwa każde cięcie tuż przed początek wypowiedzi.
 4. **Tryb montażu** przełączasz w zakładce „Słowa i cięcia” (na słowa kluczowe / montaż AI; tryby się wykluczają). Wybrany tryb dotyczy całego programu: podziału na części, intro/outro, zajawki, momentów, shortów i „W tym tygodniu”. Efekty przy cięciu, błysk i domyślny dźwięk cięcia działają w obu trybach. Lista przełączeń zapisuje się w projekcie.
 
+5. **Brak statyczności i sprawiedliwy podział.** Instrukcja każe ChatGPT przełączać kamerę mniej więcej co N s (domyślnie 35, pole „maks. czas jednej kamery bez zmiany”), gdy fabuła nie wymusza cięcia, i dbać o zbliżony czas obu kamer (ok. 50/50). Przycisk **„Uzupełnij i wyrównaj”** robi to też lokalnie: dokłada przerywniki drugiej kamery w zbyt długich ujęciach (najchętniej na początku wypowiedzi), dobierając odstęp (±10 s od ustawionego) i długość przerywników tak, żeby czas kamer w całym montażu był sprawiedliwy (ok. 50/50, tolerancja ±5 punktów) bez nadmiaru cięć. Można cofnąć.
+
 ChatGPT widzi tylko transkrypcje, nie obraz, więc decyzje opierają się na rozmowie.
+
+### Pamięć wczytanych plików i projekt
+
+Opcja „zapamiętuj wczytane pliki w tej przeglądarce” (sekcja „Eksport”, domyślnie włączona) kopiuje każdy wczytany plik (filmy, transkrypcje, grafiki, dźwięki, muzykę, czcionki, nakładki i pętle z alfą, nagrania lektora, intro/outro) do pamięci przeglądarki (IndexedDB). „Zapisz projekt” zapisuje do pliku .json listę tych plików, a po „wczytaj projekt” program sam odtwarza je z pamięci przeglądarki i uzupełnia pola, tak jakbyś wczytał je ręcznie, bez ponownego wybierania. Pliki z danymi (odpowiedzi ChatGPT, lista przełączeń AI, shortów, scen) zapisują się w samym projekcie. Zapamiętane pliki zajmują tyle miejsca na dysku, ile same pliki (także filmy); przycisk „Wyczyść zapamiętane pliki” je usuwa. Pamięć działa tylko w tej samej przeglądarce i na tym samym komputerze: na innym komputerze lub po wyczyszczeniu danych przeglądarki pliki trzeba wczytać ponownie (program pokaże, których brakuje).
 
 ### Zakładki
 
