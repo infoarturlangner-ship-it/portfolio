@@ -2767,6 +2767,7 @@ document.addEventListener('change',async e=>{
   const files=[...el.files];if(!files.length)return;
   files.forEach(f=>{S.fmeta[f.name]={name:f.name,size:f.size,lastModified:f.lastModified}});
   if(!$('rememberf').checked)return;
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}catch(e){}   // prośba o trwałe przechowywanie (przeglądarka nie usunie danych przy braku miejsca)
   for(const f of files){
     try{
       const k=fid({name:f.name,size:f.size,lastModified:f.lastModified});
