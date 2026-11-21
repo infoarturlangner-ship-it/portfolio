@@ -2866,13 +2866,56 @@ $('txburb').onchange=async e=>{
 };
 function txNew(kind){
   return kind==='inter'
-   ?{text:'',font:'inter',size:36,color:'#ffffff',ow:4,oc:'#000000',preset:'slide',dur:6,gap:0.4,pos:88,bold:false}
-   :{text:'',font:'burbank',size:120,color:'#ffffff',ow:8,oc:'#000000',preset:'pop',dur:3.5,gap:0.4,pos:50,bold:false};
+   ?{text:'',font:'inter',style:'plain',size:36,color:'#ffffff',ow:4,oc:'#000000',preset:'slide',dur:6,gap:0.4,pos:88,bold:false}
+   :{text:'',font:'burbank',style:'banner',size:110,color:'#ffffff',ow:8,oc:'#000000',preset:'pop',dur:3.5,gap:0.4,pos:50,bold:false};
+}
+// styl „baner”: pochylony niebieski baner z kursywnym białym napisem 3D i żółto-błękitnymi „iskrami” (jak logo kanału)
+function renderBannerText(it,Wd,Hd){
+  const k=Hd/1080,size=Math.max(8,(+it.size||120)*k),inter=it.font==='inter';
+  const fam=inter?'"MontazInter",Arial,Helvetica,sans-serif':(S.txBurb?`"${S.txBurb.family}",Impact,Arial,sans-serif`:'Impact,"Arial Black",Arial,sans-serif');
+  const font=`${inter?700:(S.txBurb?400:900)} ${size}px ${fam}`,SK=0.2,NAVY='#010d58';
+  const m=document.createElement('canvas').getContext('2d');m.font=font;
+  const padX=size*0.7,padY=size*0.3,maxW=Math.max(size*2,Wd*0.86-2*padX-SK*size*1.2),lines=[];
+  String(it.text).split(/\n/).forEach(par=>{let cur='';for(const w of par.split(/\s+/).filter(Boolean)){const t=cur?cur+' '+w:w;if(cur&&m.measureText(t).width>maxW){lines.push(cur);cur=w}else cur=t}lines.push(cur)});
+  const lh=size*1.12,tw=Math.max(...lines.map(l=>m.measureText(l).width),1),th=lh*lines.length;
+  const Hb=th+2*padY,sl=Hb*0.2,Wb=tw+2*padX+sl,mg=size*1.1,gw=Math.ceil(Wb+2*mg),gh=Math.ceil(Hb+2*mg);
+  const g=document.createElement('canvas');g.width=gw;g.height=gh;const x=g.getContext('2d');x.lineJoin='round';
+  const poly=(pts,dx=0,dy=0)=>{x.beginPath();pts.forEach(([px,py],i)=>i?x.lineTo(px+dx,py+dy):x.moveTo(px+dx,py+dy));x.closePath()};
+  const X0=mg,Y0=mg,P=[[X0+sl,Y0],[X0+Wb,Y0],[X0+Wb-sl,Y0+Hb],[X0,Y0+Hb]];
+  // iskry (żółte i błękitne) po bokach
+  const shard=(pts,c)=>{poly(pts);x.fillStyle=c;x.fill()};
+  shard([[X0-size*0.85,Y0+Hb*0.12],[X0+sl+size*0.35,Y0+Hb*0.34],[X0+sl*0.8+size*0.2,Y0+Hb*0.5]],'#fdd100');
+  shard([[X0-size*0.55,Y0+Hb*0.42],[X0+sl*0.7+size*0.3,Y0+Hb*0.52],[X0+sl*0.6+size*0.2,Y0+Hb*0.66]],'#00b0fe');
+  shard([[X0-size*0.5,Y0+Hb*1.02],[X0+sl*0.1+size*0.5,Y0+Hb*0.78],[X0+size*0.7,Y0+Hb*0.98]],'#fdd100');
+  shard([[X0+Wb+size*0.8,Y0+Hb*0.1],[X0+Wb-sl*0.9-size*0.2,Y0+Hb*0.3],[X0+Wb-sl*0.6-size*0.35,Y0+Hb*0.44]],'#fdd100');
+  shard([[X0+Wb+size*0.6,Y0+Hb*0.52],[X0+Wb-sl*0.8-size*0.2,Y0+Hb*0.62],[X0+Wb-sl*0.95-size*0.3,Y0+Hb*0.78]],'#00b0fe');
+  shard([[X0+Wb+size*0.35,Y0+Hb*0.92],[X0+Wb-sl*1.0-size*0.3,Y0+Hb*0.84],[X0+Wb-sl*0.9-size*0.2,Y0+Hb*0.95]],'#fdd100');
+  // granatowy cień/obrys i baner z gradientem
+  poly(P,size*0.07,size*0.1);x.fillStyle=NAVY;x.fill();
+  const gr=x.createLinearGradient(0,Y0,0,Y0+Hb);gr.addColorStop(0,'#0036a6');gr.addColorStop(0.45,'#0a4cc4');gr.addColorStop(0.78,'#0a93e6');gr.addColorStop(1,'#00d9fc');
+  poly(P);x.fillStyle=gr;x.fill();x.lineWidth=size*0.05;x.strokeStyle=NAVY;x.stroke();
+  // jasny pas w prawym górnym rogu
+  poly([[X0+Wb*0.82,Y0+Hb*0.05],[X0+Wb-sl*0.15,Y0+Hb*0.05],[X0+Wb-sl*0.55,Y0+Hb*0.38],[X0+Wb*0.8,Y0+Hb*0.2]]);x.fillStyle='rgba(120,205,255,0.55)';x.fill();
+  // napis: wytłoczenie 3D, obrys i wypełnienie
+  const cx=X0+Wb/2,top=Y0+padY,n=Math.max(2,Math.round(size*0.07)),sw=size*0.1;
+  const drawLine=(l,i,dx,dy,mode)=>{
+    x.save();x.translate(cx+dx,top+lh*(i+0.5)+dy);x.transform(1,0,-SK,1,0,0);x.font=font;x.textAlign='center';x.textBaseline='middle';
+    if(mode==='fill'){const f=x.createLinearGradient(0,-lh*0.45,0,lh*0.5),c=it.color||'#ffffff';f.addColorStop(0,c);f.addColorStop(0.6,c);f.addColorStop(1,c.toLowerCase()==='#ffffff'?'#d7def5':c);x.fillStyle=f;x.fillText(l,0,0)}
+    else if(mode==='stroke'){x.lineWidth=sw;x.strokeStyle=NAVY;x.strokeText(l,0,0)}
+    else{x.fillStyle=NAVY;x.strokeStyle=NAVY;x.lineWidth=sw;x.strokeText(l,0,0);x.fillText(l,0,0)}
+    x.restore();
+  };
+  lines.forEach((l,i)=>{for(let j=n;j>=1;j--)drawLine(l,i,j*0.55,j*0.85,'ext');drawLine(l,i,0,0,'stroke');drawLine(l,i,0,0,'fill')});
+  // pochylenie całości
+  const ang=-4.5*Math.PI/180,fw=Math.ceil(Math.abs(Math.cos(ang))*gw+Math.abs(Math.sin(ang))*gh),fh=Math.ceil(Math.abs(Math.sin(ang))*gw+Math.abs(Math.cos(ang))*gh);
+  const c=document.createElement('canvas');c.width=fw;c.height=fh;const y=c.getContext('2d');y.translate(fw/2,fh/2);y.rotate(ang);y.drawImage(g,-gw/2,-gh/2);
+  return c;
 }
 function renderTextItem(it,Wd,Hd){
+  if(it.style==='banner')return renderBannerText(it,Wd,Hd);
   const k=Hd/1080,size=Math.max(8,(+it.size||80)*k),sw=Math.max(0,(+it.ow||0)*k);
   const inter=it.font==='inter',fam=inter?'"MontazInter",Arial,Helvetica,sans-serif':(S.txBurb?`"${S.txBurb.family}",Impact,Arial,sans-serif`:'Impact,"Arial Black",Arial,sans-serif');
-  const font=`${inter?(it.bold?700:400):400} ${size}px ${fam}`;
+  const font=`${inter?(it.bold?700:400):(S.txBurb?400:900)} ${size}px ${fam}`;
   const c=document.createElement('canvas'),x=c.getContext('2d');x.font=font;
   const maxW=Wd*0.86,lines=[];
   String(it.text).split(/\n/).forEach(par=>{
@@ -2921,6 +2964,7 @@ function renderTexts(){
     const d=document.createElement('div');d.className='mk';d.style.cssText='border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px';
     d.innerHTML=`<div class="row"><b>#${i+1}</b><label>czcionka</label><select class="tf"><option value="burbank">Burbank Big Regular (nagłówek)</option><option value="inter">Inter (komunikat)</option></select>
       <label><input type="checkbox" class="tb"> pogrubiony (Inter)</label>
+      <label>styl</label><select class="tst"><option value="banner">baner jak logo Kooperacyjni (niebieski, napis 3D)</option><option value="plain">zwykły tekst z obrysem</option></select>
       <label>animacja</label><select class="ta"></select>
       <button class="tp">▶ podgląd</button><button class="tu" title="w górę">↑</button><button class="td" title="w dół">↓</button><button class="tx">✕</button></div>
       <div class="row" style="margin-top:6px"><textarea class="tt" placeholder="treść tekstu (Enter = nowa linia)" style="height:54px"></textarea></div>
@@ -2931,9 +2975,9 @@ function renderTexts(){
        <label>położenie pionowe (% wysokości)</label><input type="number" class="tpos" min="0" max="100" step="1" style="width:60px"></div>`;
     const sel=d.querySelector('.ta');for(const [k,v] of Object.entries(ANIMS)){const o=document.createElement('option');o.value=k;o.textContent=v;sel.appendChild(o)}
     const q=s=>d.querySelector(s);
-    q('.tf').value=it.font;q('.tb').checked=!!it.bold;sel.value=it.preset;q('.tt').value=it.text;q('.ts').value=it.size;q('.tc').value=it.color;q('.to').value=it.oc;q('.tw').value=it.ow;q('.tu2').value=it.dur;q('.tg').value=it.gap;q('.tpos').value=it.pos;
+    q('.tf').value=it.font;q('.tst').value=it.style||'plain';q('.tb').checked=!!it.bold;sel.value=it.preset;q('.tt').value=it.text;q('.ts').value=it.size;q('.tc').value=it.color;q('.to').value=it.oc;q('.tw').value=it.ow;q('.tu2').value=it.dur;q('.tg').value=it.gap;q('.tpos').value=it.pos;
     const upd=()=>{S.txVer++;recompute()};
-    q('.tf').onchange=()=>{it.font=q('.tf').value;upd()};q('.tb').onchange=()=>{it.bold=q('.tb').checked;upd()};sel.onchange=()=>{it.preset=sel.value;upd()};
+    q('.tf').onchange=()=>{it.font=q('.tf').value;upd()};q('.tst').onchange=()=>{it.style=q('.tst').value;upd()};q('.tb').onchange=()=>{it.bold=q('.tb').checked;upd()};sel.onchange=()=>{it.preset=sel.value;upd()};
     q('.tt').oninput=()=>{it.text=q('.tt').value;upd()};q('.ts').oninput=()=>{it.size=+q('.ts').value;upd()};q('.tc').oninput=()=>{it.color=q('.tc').value;upd()};q('.to').oninput=()=>{it.oc=q('.to').value;upd()};
     q('.tw').oninput=()=>{it.ow=+q('.tw').value;upd()};q('.tu2').oninput=()=>{it.dur=+q('.tu2').value;upd()};q('.tg').oninput=()=>{it.gap=+q('.tg').value;upd()};q('.tpos').oninput=()=>{it.pos=+q('.tpos').value;upd()};
     q('.tp').onclick=()=>playTextPreview(it);
