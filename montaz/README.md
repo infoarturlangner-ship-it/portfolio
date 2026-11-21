@@ -129,6 +129,14 @@ Liczba pominiętych trafień jest widoczna w podsumowaniu nad listą trafień. 0
 
 Sekcja „Nakładki wideo na słowa”: dodajesz wiersz (słowo, z której transkrypcji, plik .mov/.webm z alfą). Gdy słowo pada w materiale, film gra raz na najwyższej warstwie, na całym kadrze, od początku do końca (długość program odczytuje z pliku, można poprawić). Nakładka trwa ciągle także przez cięcia kamer i nie powtarza się, dopóki trwa. Można dodać kilka nakładek. Działa w montażu, zajawce, momentach i skrócie „W tym tygodniu”. Dźwięk nakładki nie jest używany, a podgląd w przeglądarce jej nie pokazuje (widać ją w renderze). Ustawienia zapisują się w projekcie.
 
+### Teksty z animacją na początku filmu
+
+W zakładce „Grafiki i efekty” sekcja „Teksty z animacją na początku filmu”. Dodajesz teksty (przyciski „+ nagłówek (Burbank)” i „+ komunikat (Inter)”), a one pojawiają się po kolei na początku głównego montażu, czyli po intro i zajawce, i znikają po ustawionym czasie. Każdy tekst ma: treść (kilka linii), czcionkę, wielkość, kolor, obrys, animację (wjazd, pop, odsłanianie, odbicie), czas wyświetlania, przerwę przed sobą i położenie pionowe (% wysokości); ↑/↓ zmieniają kolejność, „▶ podgląd” pokazuje animację. „Pierwszy tekst po (s)” ustawia opóźnienie od początku montażu, a „w każdej części filmu” powtarza teksty na początku każdego odcinka.
+
+- **Inter** (komunikaty, np. „Wszelkie podobieństwo do prawdziwych osób… jest przypadkowe”) jest wbudowany w program, z polskimi znakami, w grubości zwykłej i pogrubionej.
+- **Burbank Big Regular** (nagłówki, np. „Subskrybuj”) wgrywasz z własnego pliku .ttf/.otf, bo to czcionka na licencji Epic Games. Bez pliku nagłówki są pisane zastępczą, grubą czcionką. Plik czcionki jest zapamiętywany razem z projektem jak inne pliki.
+- Teksty nie pojawiają się w zajawce, momentach, „W tym tygodniu” ani w shortach, tylko w głównym montażu. Są renderowane skryptem jako klipy z kanałem alfa (ten sam mechanizm animacji co tytuły momentów) i nakładane na obraz.
+
 ### Efekt przy cięciu
 Sekcja „Efekt przy cięciu” (domyślnie wyłączona):
 - **rozjaśnienie** po każdym cięciu z płynnym powrotem do naturalnych kolorów; suwaki siły i czasu (ease-out);
