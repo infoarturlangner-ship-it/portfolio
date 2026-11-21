@@ -218,6 +218,18 @@ ChatGPT widzi tylko transkrypcje, nie obraz, więc decyzje opierają się na roz
 
 Opcja „zapamiętuj wczytane pliki w tej przeglądarce” (sekcja „Eksport”, domyślnie włączona) kopiuje każdy wczytany plik (filmy, transkrypcje, grafiki, dźwięki, muzykę, czcionki, nakładki i pętle z alfą, nagrania lektora, intro/outro) do pamięci przeglądarki (IndexedDB). „Zapisz projekt” zapisuje do pliku .json listę tych plików, a po „wczytaj projekt” program sam odtwarza je z pamięci przeglądarki i uzupełnia pola, tak jakbyś wczytał je ręcznie, bez ponownego wybierania. Pliki z danymi (odpowiedzi ChatGPT, lista przełączeń AI, shortów, scen) zapisują się w samym projekcie. Zapamiętane pliki zajmują tyle miejsca na dysku, ile same pliki (także filmy); przycisk „Wyczyść zapamiętane pliki” je usuwa. Pamięć działa tylko w tej samej przeglądarce i na tym samym komputerze: na innym komputerze lub po wyczyszczeniu danych przeglądarki pliki trzeba wczytać ponownie (program pokaże, których brakuje).
 
+### Komentarz lektora w ciszy (uszczypliwy, w stylu „Kuchennych rewolucji”)
+
+Na dole zakładki „Montaż AI”, sekcja „5. Komentarz lektora w ciszy”. Działa przy dowolnym gotowym montażu (AI albo na słowa kluczowe).
+
+1. **Ciche okna.** Program znajduje na wspólnej osi czasu fragmenty bez mowy w obu transkrypcjach (min. cisza 4 s, margines 0,7 s od mowy z każdej strony; oba parametry do zmiany) i numeruje je.
+2. **Instrukcja dla ChatGPT** (dzielona na części jak w montażu AI): montaż (oznaczenia `>>> kamera N`), transkrypcja z podpisami osób, lista okien z limitem słów oraz styl komentarza (domyślnie w stylu „Kuchennych rewolucji”, edytowalny). ChatGPT ma wstawić komentarze tylko w wybranych oknach, **proporcjonalnie do długości odcinka** (domyślnie średnio jeden na 75 s; program podaje docelową liczbę i zakres dla każdej części), rozłożone równomiernie, ale **tylko tam, gdzie warto, bez wymuszania** (okna bez czegoś wartego komentarza ma pomijać). W oknie dłuższym niż 30 s dopuszczone są dwa komentarze. Instrukcja zawiera też krótki poradnik tagów ElevenLabs v4 (tagi głosowe `[sarcastic]`, `[sighs]`, `[mischievously]` itd.; unikanie tagów efektów dźwiękowych).
+3. **Odpowiedź** ChatGPT (JSON `{"komentarze":[{"okno":3,"tekst":"[sarcastic] …"}]}`) wczytujesz z plików lub wklejasz; wiele części łączy się w jedną listę. Tabela jest edytowalna (czas, tekst, podgląd ▶, usuń, dodaj) i pokazuje przewidywaną długość mowy z ostrzeżeniem ⚠, gdy komentarz jest dłuższy niż ciche okno.
+4. **Tekst dla ElevenLabs:** frazy oddzielone linią `[pause]` (dzielony na pliki po ok. 4500 znaków).
+5. **Nagranie lektora** (jeden plik albo tyle, ile pobrałeś): program wykrywa przerwy po `[pause]`, przypisuje frazy do komentarzy i w renderze wstawia każdą w jej chwili (po przesunięciu o intro i zajawkę oraz o początek części). Dźwięk z gry jest przyciszany pod komentarzem (siła w polu). Komentarz trafia tylko do głównego montażu, nie do zajawki, intro, momentów i shortów.
+
+Jeśli program wykryje za mało przerw, sprawdź w ElevenLabs dłuższe `[pause]` (np. dwa razy). Do głosu użyj ogólnego głosu, nie klonu głosu prawdziwej osoby.
+
 ### Zakładki
 
 Program jest podzielony na poziome zakładki (u góry, przypięte do góry strony): Pliki, Podgląd i markery, Słowa i cięcia, Grafiki i efekty (grafiki, efekt przy cięciu, nakładki wideo na słowa), Zajawka, Najlepsze momenty, W tym tygodniu, Shorty, Eksport i skrypt. Przycisk „▶” przy scenach/momentach/zajawkach sam przełącza na zakładkę „Podgląd i markery”. Program pamięta ostatnią otwartą zakładkę.

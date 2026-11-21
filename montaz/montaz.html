@@ -179,6 +179,32 @@ section.tabhide{display:none}
 <b>4. Lista przełączeń</b> <span class="mut">(możesz poprawiać czas i kamerę, dodawać i usuwać)</span>
 <div class="hitbox" style="max-height:340px;margin:6px 0"><table id="aitab"></table></div>
 <div class="row" style="margin-bottom:8px"><button id="aiadd">+ dodaj przełączenie</button><span class="mut" id="aiinfo"></span></div>
+<div id="cmbox" style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+<b>5. Komentarz lektora w ciszy</b>
+<div class="mut" style="margin:4px 0 8px">Gdy montaż jest gotowy (w trybie AI albo na słowa kluczowe), program znajduje ciche okna, czyli fragmenty bez mowy w obu transkrypcjach, i przygotowuje instrukcję dla ChatGPT. Instrukcja zawiera montaż (zmiany kamer), transkrypcję i listę okien z limitem słów. ChatGPT pisze uszczypliwe komentarze (domyślnie w stylu „Kuchennych rewolucji”) tylko w wybranych oknach, proporcjonalnie do długości odcinka i tylko tam, gdzie warto, z tagami głosu ElevenLabs v4. Z odpowiedzi program robi tekst dla ElevenLabs (frazy oddzielone <span class="mono">[pause]</span>), a wczytane nagranie wstawia fraza po frazie w swoich oknach. Komentarz trafia tylko do głównego montażu (nie do zajawki, intro, momentów, shortów).</div>
+<div id="cmreq" style="margin-bottom:8px"></div>
+<div class="row" style="margin-bottom:6px">
+ <label>min. cisza (s)</label><input type="number" id="cmmin" value="4" min="2" step="0.5" style="width:60px">
+ <label>margines od mowy (s)</label><input type="number" id="cmmargin" value="0.7" min="0" step="0.1" style="width:60px">
+ <label>średnio 1 komentarz co (s)</label><input type="number" id="cmdens" value="75" min="20" step="5" style="width:65px">
+ <label>długość części (min)</label><input type="number" id="cmchunk" value="20" min="2" step="1" style="width:60px">
+</div>
+<div class="row" style="margin-bottom:6px"><label>styl komentarza</label><input type="text" id="cmstyle" style="width:min(720px,100%)" value="Uszczypliwy, ironiczny i dramatyczny, jak Magda Gessler w „Kuchennych rewolucjach”: przesadne oburzenie, ostre porównania, sarkazm, teatralne westchnienia."></div>
+<div class="row" style="margin-bottom:6px"><label>kontekst (opcjonalnie)</label><input type="text" id="cmctx" placeholder="np. gra Fortnite, dwóch graczy, zbiórka na schronisko" style="width:min(520px,100%)"></div>
+<div class="row" style="margin-bottom:6px"><button id="cmgen" class="pri">⬇ Pobierz instrukcje (komentarz)</button><span class="mut" id="cmgeninfo"></span></div>
+<div id="cmparts" class="row" style="margin-bottom:10px"></div>
+<div class="row" style="margin-bottom:6px"><label>pliki z odpowiedziami (.json/.txt, kilka naraz)</label><input type="file" id="cmin" multiple></div>
+<div class="row" style="margin:4px 0"><textarea id="cmpaste" placeholder="…albo wklej odpowiedź ChatGPT (JSON); każde kliknięcie dodaje kolejną część" style="height:60px"></textarea></div>
+<div class="row" style="margin:6px 0 10px"><button id="cmload">Dodaj wklejoną odpowiedź</button><button id="cmclear">Wyczyść komentarze</button><span class="mut" id="cmmsg"></span></div>
+<b>Komentarze</b> <span class="mut">(możesz poprawiać czas i tekst, dodawać i usuwać; wstawka zaczyna się o podanej chwili)</span>
+<div class="hitbox" style="max-height:340px;margin:6px 0"><table id="cmtab"></table></div>
+<div class="row" style="margin-bottom:10px"><button id="cmadd">+ dodaj komentarz</button><span class="mut" id="cminfo"></span></div>
+<b>Tekst dla ElevenLabs</b>
+<div class="row" style="margin:6px 0 10px"><label>maks. znaków w pliku</label><input type="number" id="cmmaxc" value="4500" min="500" step="500" style="width:75px"><button id="cmtxt" class="pri">⬇ Pobierz tekst dla lektora</button><span class="mut" id="cmtxtinfo"></span></div>
+<b>Nagranie lektora</b>
+<div class="row" style="margin:6px 0"><label>plik audio z ElevenLabs (jeden lub tyle, ile pobrałeś plików tekstu)</label><input type="file" id="cmnar" accept="audio/*,.mp3,.wav,.m4a" multiple><span class="mut" id="cmnari"></span></div>
+<div class="row" style="margin-bottom:6px"><label>głośność komentarza %</label><input type="number" id="cmvol" value="100" min="0" max="300" step="5" style="width:65px"><label>przyciszanie dźwięku z gry pod komentarzem (siła)</label><input type="range" id="cmduck" min="0" max="100" value="60" style="width:110px"><span class="mono" id="cmduckv">60</span></div>
+</div>
 </section>
 
 <section data-tab="fx">
@@ -959,6 +985,27 @@ function genScript(plan,o){
       M.push(`ffmpeg -y -loglevel error ${inputs.join(' ')} -filter_complex "${graph.join(';')}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k ${q(pt.out)}`);
       M.push(`rm -f ${T}_all${pid}.mkv ${T}_main${pid}.mkv ${T}_teaser${pid}.mkv`);
     }
+    // komentarz lektora (w ciszy): drugi przebieg dźwięku gotowej części, z przyciszaniem dźwięku z gry pod komentarzem
+    {
+      const cm=o.cm,items=cm&&cm.items?cm.items.filter(c=>c.t>=pt.from-0.01&&c.t<pt.to-0.3):[];
+      if(items.length&&cm.narr&&cm.narr.length){
+        const fmtC='aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo',off0=(pt.tdur||0)+(pt.hasIntro?(o.intro.dur||0):0)-pt.from;
+        const inp=[`-i ${q(pt.out)}`],g=[`[0:a]${fmtC}[a0]`],labs=[];
+        items.forEach((c,m)=>{
+          const f=cm.narr[c.f||0];if(!f)return;need.add(f.name);const ix=inp.length;
+          inp.push(`-ss ${n3(Math.max(0,c.s))} -t ${n3(c.dur+0.15)} -i ${q(f.name)}`);
+          g.push(`[${ix}:a]${fmtC},volume=${vol(cm.vol)},adelay=${Math.round(Math.max(0,off0+c.t)*1000)}:all=1,asetpts=N/SR/TB[c${m}]`);labs.push(`[c${m}]`);
+        });
+        if(labs.length){
+          const thr=n3(Math.max(0.001,Math.min(1,0.2*Math.pow(0.05,(+cm.duck.thr||0)/100)))),ratio=n3(1+19*Math.max(0,Math.min(100,+cm.duck.strength||0))/100);
+          const sc=`threshold=${thr}:ratio=${ratio}:attack=${Math.round(+cm.duck.attack||40)}:release=${Math.round(+cm.duck.release||500)}:makeup=1`;
+          g.push(labs.length===1?`${labs[0]}anull[cm0]`:`${labs.join('')}amix=inputs=${labs.length}:normalize=0,asetpts=N/SR/TB[cm0]`,
+            `[cm0]apad=whole_dur=${n3(pt.total)},atrim=0:${n3(pt.total)},asetpts=N/SR/TB,asplit=2[k][c]`,
+            `[a0][k]sidechaincompress=${sc}[fd]`,`[c][fd]amix=inputs=2:duration=first:normalize=0,asetpts=N/SR/TB[a]`);
+          M.push(`ffmpeg -y -loglevel error ${inp.join(' ')} -filter_complex "${g.join(';')}" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -t ${n3(pt.total)} ${T}/cm${pid}.mp4`,`mv ${T}/cm${pid}.mp4 ${q(pt.out)}`);
+        }
+      }
+    }
     const mix=hash32(M.join('\n'));
     const label=plan.length>1?`Część ${pt.i+1}/${plan.length} → ${pt.out}`:pt.out;
     return {pid,M,mix,label,nEnc};
@@ -1273,8 +1320,8 @@ function weekClips(o){
   });
 }
 // pliki tekstowe dla lektora (ElevenLabs): akapity rozdzielone przerwą, pakowane do limitu znaków na plik
-function buildNarrationFiles(texts,{maxChars=4500,breaks=true,breakSec=1}={}){
-  const sep=breaks?`\n<break time="${(+breakSec||1).toFixed(1)}s" />\n`:'\n\n',files=[];let cur=[];
+function buildNarrationFiles(texts,{maxChars=4500,breaks=true,breakSec=1,sepTag=''}={}){
+  const sep=sepTag?`\n${sepTag}\n`:breaks?`\n<break time="${(+breakSec||1).toFixed(1)}s" />\n`:'\n\n',files=[];let cur=[];
   const len=a=>a.join(sep).length;
   for(const t of texts){
     if(cur.length&&len([...cur,t])>maxChars){files.push(cur);cur=[]}
@@ -1419,6 +1466,76 @@ function genWeekScript(o){
     mixCmd,`rm -f ${T}_all.mkv`,`rm -rf ${T}`,`echo "Gotowe: ${out.replace(/["$`\\]/g,'')}"`];
   return{script:L.join('\n'),clips,total,flatCount:flat.length};
 }
+// ============ Komentarz lektora w ciszy (uszczypliwy, w stylu „Kuchennych rewolucji”) ============
+const wordsNoTags=t=>Math.max(1,(String(t).replace(/\[[^\]]*\]/g,' ').replace(/<[^>]*>/g,' ').match(/\S+/g)||[]).length);
+// ciche okna: fragmenty bez mowy w żadnej z transkrypcji (z marginesem), min. długości minGap
+function commentWindows(entries,inT,outT,{minGap=4,margin=0.7}={}){
+  const iv=[];
+  const lineEnd=(l,t0)=>{const w=wordsNoTags(l.text),est=Math.max(1,w/2.4+0.5),dur=(l.e!=null&&isFinite(l.e)&&l.e>t0)?Math.max(0.6,Math.min(est,l.e-t0)):est;return t0+dur};
+  (entries||[]).forEach(e=>{
+    let s=Infinity,en=-Infinity;
+    [e.a,e.b].forEach(l=>{if(l){s=Math.min(s,l.t);en=Math.max(en,lineEnd(l,l.t))}});
+    if(isFinite(s))iv.push([s,en]);
+  });
+  iv.sort((x,y)=>x[0]-y[0]);
+  const m=[];for(const x of iv){if(m.length&&x[0]<=m[m.length-1][1])m[m.length-1][1]=Math.max(m[m.length-1][1],x[1]);else m.push([...x])}
+  const wins=[];let prev=inT,first=true;
+  const push=(a,b)=>{const A=a+(first?0:margin),B=b-margin;if(B-A>=minGap)wins.push({id:wins.length+1,a:A,b:B,len:B-A})};
+  for(const x of m){if(x[1]<=inT)continue;if(x[0]>=outT)break;push(prev,Math.min(x[0],outT));first=false;prev=Math.max(prev,x[1])}
+  if(outT-prev>=minGap+margin){const A=prev+margin,B=outT;if(B-A>=minGap)wins.push({id:wins.length+1,a:A,b:B,len:B-A})}
+  return wins;
+}
+function cmLabel(e,n1,n2){
+  const a=String(n1||'').trim()||'kamera 1',b=String(n2||'').trim()||'kamera 2';
+  if(e.kind==='1'||e.kind==='1>2')return a;if(e.kind==='2'||e.kind==='2>1')return b;return '?';
+}
+function buildCommentPrompt({entries=[],windows=[],segs=[],a,b,idx=1,total=1,n1='',n2='',style='',density=75,ctx='',epLen=0,minWords=3}){
+  const dens=Math.max(20,+density||75),span=b-a,wins=windows.filter(w=>w.a>=a&&w.a<b);
+  const want=Math.max(1,Math.round(span/dens)),lo=Math.max(1,Math.round(want*0.6)),hi=Math.max(lo,Math.round(want*1.3));
+  const L=['# Zadanie: komentarz lektora w ciszy (do wygenerowania w ElevenLabs)','',
+   `Jesteś autorem komentarza do odcinka z gry. Dwie osoby grają razem i rozmawiają (**film 1** = ${n1?`„${n1}”`:'osoba z kamery 1'}, **film 2** = ${n2?`„${n2}”`:'osoba z kamery 2'}). Poniżej jest gotowy montaż (zmiany kamer) i transkrypcja rozmowy. Napisz krótkie komentarze lektora, które będą wstawione TYLKO w momentach ciszy (wyznaczone „ciche okna”), żeby nie nachodziły na głosy graczy. To jest fragment ${idx} z ${total} (od ${fmtHMS(a)} do ${fmtHMS(b)}${epLen?`; cały odcinek trwa ok. ${Math.round(epLen/60)} min`:''}).`,''];
+  if(String(ctx||'').trim())L.push('Kontekst: '+String(ctx).trim(),'');
+  L.push('## Styl komentarza',
+   `- ${String(style||'').trim()||'Uszczypliwy, ironiczny i dramatyczny, jak Magda Gessler w „Kuchennych rewolucjach”: przesadne oburzenie, ostre porównania, sarkazm, teatralne westchnienia.'}`,
+   '- Komentarz dotyczy tego, co się właśnie działo (wpadka, głupi pomysł, zwrot akcji, śmieszna rozmowa, dramatyczna sytuacja), nie ogólnych tematów. Odnoś się do konkretów z transkrypcji; niczego nie zmyślaj.',
+   '- Bądź złośliwy dla sytuacji i zachowania w grze w sposób żartobliwy, bez wulgaryzmów i bez obrażania osób. Po polsku, naturalnie do czytania na głos, bez emoji i nawiasów (poza tagami).','',
+   '## Gęstość i dobór momentów',
+   `- W tym fragmencie (${Math.round(span/60)} min) przewidziałem średnio jeden komentarz na ok. ${Math.round(dens)} s, czyli około ${want} komentarzy (rozsądny zakres ${lo}–${hi}). Dostosuj do tego, co się dzieje: więcej tam, gdzie jest co komentować, mniej tam, gdzie nic się nie dzieje.`,
+   '- Rozkładaj komentarze względnie równomiernie w całym fragmencie (unikaj skupisk i długich pustych odcinków), ale **nie na siłę**: jeśli w danym oknie nie ma nic wartego komentarza, pomiń to okno.',
+   '- Każdy komentarz wstawiasz w jedno ciche okno (podaj jego numer). Jedno okno = zwykle jeden komentarz. W oknie dłuższym niż 30 s możesz dać dwa: dla drugiego dodaj pole "po" (sekundy od początku okna, co najmniej 15 s po pierwszym).',
+   `- Długość: każde okno ma limit słów (bez tagów). Nie przekraczaj go; krótkie, celne uwagi (min. ${minWords} słowa) są lepsze niż długie.`,'',
+   '## Tagi ElevenLabs v4 (urozmaicenie głosu)',
+   '- Używaj tagów w nawiasach kwadratowych, oszczędnie (zwykle jeden na komentarz, czasem dwa), na początku frazy lub tuż przed kluczowym słowem. Różnicuj je.',
+   '- Dobre tagi głosowe: `[sarcastic]`, `[sighs]`, `[exhales]`, `[mischievously]`, `[curious]`, `[excited]`, `[laughs]`, `[laughs harder]`, `[snorts]`, `[whispers]`.',
+   '- Unikaj tagów efektów dźwiękowych (`[gunshot]`, `[applause]`, `[clapping]`, `[explosion]`, `[swallows]`, `[gulps]`, `[fart]`, `[woo]`, `[sings]`), chyba że naprawdę pasują, bo model może wygenerować dźwięk zamiast sposobu mówienia. Tagi opisuj jako cechy głosu (np. `[low, gravelly voice]`).',
+   '- Tagi piszesz po angielsku, a tekst komentarza po polsku.','',
+   '## Format odpowiedzi',
+   'Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez komentarzy, bez tekstu przed ani po), w tej strukturze (numer okna z listy poniżej, tekst z tagami):','',
+   '```json','{ "komentarze": [',
+   '  { "okno": 3, "tekst": "[sarcastic] No pięknie, mistrzowie strategii znowu wylądowali w wodzie." },',
+   '  { "okno": 7, "tekst": "[sighs] Ja nie mogę. Tu się nie da patrzeć." }','] }','```','',
+   '## Montaż i transkrypcja',
+   'Oznaczenia: `>>> kamera N` = od tej chwili w montażu widać kamerę N; `[g:mm:ss] osoba: tekst` = linia rozmowy; `=== CICHE OKNO #N … ===` = miejsce, w którym wolno wstawić komentarz.','');
+  const seq=[];
+  entries.filter(e=>e.t>=a&&e.t<b).forEach(e=>{const t=e.kind==='2'?e.b.text:e.kind==='2>1'?e.b.text:e.a.text;seq.push({t:e.t,o:1,s:`[${fmtHMS(e.t)}] ${cmLabel(e,n1,n2)}: ${t}`})});
+  wins.forEach(w=>seq.push({t:w.a,o:0,s:`=== CICHE OKNO #${w.id}: ${fmtHMS(w.a)}–${fmtHMS(w.b)} (${w.len.toFixed(0)} s, max ${Math.max(minWords,Math.floor((w.len-0.3)*2.2))} słów) ===`}));
+  segs.filter(s=>s.a>=a&&s.a<b).forEach(s=>seq.push({t:s.a,o:-1,s:`>>> kamera ${s.src}`}));
+  seq.sort((x,y)=>x.t-y.t||x.o-y.o).forEach(x=>L.push(x.s));
+  return L.join('\n');
+}
+function parseCommentJson(text,windows){
+  const m=String(text).match(/\{[\s\S]*\}|\[[\s\S]*\]/);if(!m)throw new Error('nie znalazłem JSON-a');
+  const j=JSON.parse(m[0]),list=Array.isArray(j)?j:(j.komentarze||j.comments||j.wstawki||[]);
+  const out=[];
+  list.forEach(x=>{
+    const txt=String(x.tekst??x.text??x.komentarz??'').trim();if(!txt)return;
+    const id=x.okno??x.window??x.id,w=id!=null?(windows||[]).find(y=>y.id===+id):null;
+    if(w){const po=Math.max(0,Math.min(w.len-3,+x.po||0));out.push({t:w.a+po,len:w.len-po,text:txt,win:w.id})}
+    else if(x.od!=null||x.t!=null){const tt=typeof (x.od??x.t)==='number'?(x.od??x.t):parseTime(x.od??x.t);out.push({t:tt,len:+x.dl||0,text:txt,win:null})}
+  });
+  if(!out.length)throw new Error('JSON nie zawiera komentarzy (okno, tekst)');
+  return out.sort((a,b)=>a.t-b.t);
+}
 // ============ Podział na odcinki wg AI: granice w sensownych momentach (puenta, koniec wątku) ============
 function buildSplitPrompt({lines1=[],lines2=[],offset=0,src='1',inT=0,outT=1e9,n=2,expected=[],tolSec=240,avgSec=0,ctx=''}){
   const both=src==='3',lines=[];
@@ -1468,8 +1585,8 @@ function lineSim(a,b){
 }
 // Zdania z obu transkrypcji na wspólnej osi czasu. d = czas w filmie 2 minus czas w filmie 1 (d>0: film 1 ma frazę wcześniej).
 function matchTranscripts(lines1,lines2,offset,{win=6,minSim=0.5,thr=0.3,inT=0,outT=1e9}={}){
-  const A=(lines1||[]).map(l=>({t:l.t0,text:l.text})).filter(l=>l.t>=inT-win&&l.t<outT+win).sort((x,y)=>x.t-y.t);
-  const B=(lines2||[]).map(l=>({t:l.t0-offset,text:l.text})).filter(l=>l.t>=inT-win&&l.t<outT+win).sort((x,y)=>x.t-y.t);
+  const A=(lines1||[]).map(l=>({t:l.t0,e:l.t1,text:l.text})).filter(l=>l.t>=inT-win&&l.t<outT+win).sort((x,y)=>x.t-y.t);
+  const B=(lines2||[]).map(l=>({t:l.t0-offset,e:(l.t1==null?l.t0:l.t1)-offset,text:l.text})).filter(l=>l.t>=inT-win&&l.t<outT+win).sort((x,y)=>x.t-y.t);
   const used=new Set(),out=[];let lo=0;
   for(const a of A){
     while(lo<B.length&&B[lo].t<a.t-win)lo++;
@@ -1738,7 +1855,7 @@ function genEDL(segs,o){
 
 const $=id=>document.getElementById(id);
 const v1=$('v1'),v2=$('v2');
-const S={texts:[],txBurb:null,txVer:0,cutMode:'kw',ai:{sw:[]},split:{times:[]},teasers:[],cuts:[],stopAt:null,fxName:'',fxUrl:null,fxOK:false,txName:'',txOK:false,ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'src',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
+const S={cm:{windows:[],items:[]},cmspans:[],cmfiles:[],texts:[],txBurb:null,txVer:0,cutMode:'kw',ai:{sw:[]},split:{times:[]},teasers:[],cuts:[],stopAt:null,fxName:'',fxUrl:null,fxOK:false,txName:'',txOK:false,ov:[],activeSrc:1,rules:[{q:'megalodon',qsrc:'1',act:'src',sfx:'',vol:100,off:0}],introF:'',introDur:0,outroF:'',outroDur:0,events:[],lastT:null,w1:[],w2:[],f1:'film1.mp4',f2:'film2.mp4',m1:0,m2:0,segs:[],hits:[],off:new Set(),manual:false,playing:false,mode:'cal'};
 const fmt=t=>{const s=Math.abs(t),hh=Math.floor(s/3600),mm=Math.floor(s/60)%60,ss=(s%60).toFixed(2).padStart(5,'0');return (t<0?'-':'')+(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+ss};
 const tv=id=>parseTime($(id).value);
 // koniec zakresu dla instrukcji ChatGPT: puste „do” (albo „do” ≤ „od”) = do końca materiału
@@ -1918,7 +2035,7 @@ $('tl').onclick=e=>{
 };
 
 // eksport
-const opts=()=>({texts:textsOpts(),textStart:num($('txstart').value,0.5),textAll:$('txall').checked,trigOv:trigEvents(S.vtr,S.w1,S.w2,offset()),introMusic:S.imName?{name:S.imName,vol:num($('imvol').value,100),fo:num($('imfo').value,1.5),mute:$('immute').checked}:null,defSfx:defSfxCfg(),introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
+const opts=()=>({cm:cmOpts(),texts:textsOpts(),textStart:num($('txstart').value,0.5),textAll:$('txall').checked,trigOv:trigEvents(S.vtr,S.w1,S.w2,offset()),introMusic:S.imName?{name:S.imName,vol:num($('imvol').value,100),fo:num($('imfo').value,1.5),mute:$('immute').checked}:null,defSfx:defSfxCfg(),introVol:num($('introvol').value,100),outroVol:num($('outrovol').value,100),ovTz:num($('ovtz').value,1.5),flash:{on:$('flashon').checked,strength:+$('flashs').value,dur:+$('flashd').value},fx:S.fxName?{name:S.fxName}:null,textfx:S.txName?{name:S.txName}:null,ovIn:num($('ovin').value,1.5),ovOut:num($('ovout').value,1.5),overlays:S.ov.filter(v=>v.name).map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),intro:S.introF?{f:S.introF,dur:S.introDur}:null,outro:S.outroF?{f:S.outroF,dur:S.outroDur}:null,events:S.events,f1:S.f1,f2:S.f2,offset:offset(),W:+$('W').value||1920,H:+$('H').value||1080,fps:+$('ofps').value||30,enc:$('enc').value,out:$('outn').value||'montaz.mp4'});
 function loadExtra(kind,file){
   if(!file){S[kind+'F']='';S[kind+'Dur']=0;$('i'+kind).textContent='';recompute();return}
   const v=document.createElement('video');v.preload='metadata';v.src=URL.createObjectURL(file);
@@ -1978,7 +2095,7 @@ const dl=(name,text,type='text/plain')=>{const a=document.createElement('a');a.h
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('script').value);$('copy').textContent='Skopiowano ✓'}catch{$('script').select();document.execCommand('copy')}setTimeout(()=>$('copy').textContent='Kopiuj skrypt',1500)};
 $('dlsh').onclick=()=>dl('render.sh',$('script').value);
 $('dledl').onclick=()=>dl('montaz.edl',genEDL(S.segs,opts()));
-$('save').onclick=()=>dl('projekt.json',JSON.stringify({...fileProjectState(),tx:{items:S.texts,start:$('txstart').value,all:$('txall').checked},split:{times:S.split.times,set:Object.fromEntries(['spsrc','sptol','sptail','spctx'].map(k=>[k,$(k).value]))},ai:{sw:S.ai.sw,mode:S.cutMode,set:Object.fromEntries(['ain1','ain2','aimin','ailead','aichunk','aictx','aimax'].map(k=>[k,$(k).value]))},vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
+$('save').onclick=()=>dl('projekt.json',JSON.stringify({...fileProjectState(),cm:{windows:S.cm.windows,items:S.cm.items,set:Object.fromEntries(['cmmin','cmmargin','cmdens','cmchunk','cmstyle','cmctx','cmmaxc','cmvol','cmduck'].map(k=>[k,$(k).value]))},tx:{items:S.texts,start:$('txstart').value,all:$('txall').checked},split:{times:S.split.times,set:Object.fromEntries(['spsrc','sptol','sptail','spctx'].map(k=>[k,$(k).value]))},ai:{sw:S.ai.sw,mode:S.cutMode,set:Object.fromEntries(['ain1','ain2','aimin','ailead','aichunk','aictx','aimax'].map(k=>[k,$(k).value]))},vtr:S.vtr.map(r=>({q:r.q,qsrc:r.qsrc,name:r.name,len:r.len})),f1:S.f1,f2:S.f2,m1:S.m1,m2:S.m2,rules:S.rules.map(r=>({q:r.q,qsrc:r.qsrc,act:r.act,sfx:r.sfx||'',vol:r.vol,off:r.off,mute:!!r.mute})),intromusic:{name:S.imName,vol:$('imvol').value,fo:$('imfo').value,mute:$('immute').checked},defsfx:{name:S.defSfxName,vol:$('dsv').value,off:$('dso').value,auto:$('dsa').checked},overlays:S.ov.map(v=>({name:v.name,film:v.film,x:v.x,y:v.y,w:v.w,op:v.op})),introF:S.introF,outroF:S.outroF,moms:S.moms,mset:Object.fromEntries(['mnl','mns','mmin','mmax','mkind','msrc','mctx','mtitle','msizemain','manimmain','mdurmain','msizemom','manimmom','mdurmom','mcol','mocol','mow','mbg','mbgc','mmvol','mduck','mthr','mrel','mfin','mfout','mout'].map(k=>[k,$(k).value])),mchk:{intromus:$('mintromus').checked,intro:$('mintro').checked,outro:$('moutro').checked,dl:$('mdl').checked,ds:$('mds').checked},mnames:{musicName:S.musicName,fontMain:S.fonts.main&&S.fonts.main.name,fontMom:S.fonts.mom&&S.fonts.mom.name},sh:{shorts:S.shorts,mus:S.shmus,frame:S.shframe,outro:S.shoutro,set:Object.fromEntries(['shn','shmin','shmax','shmw','shkind','shsrc','shctx','shbrk','shmaxc','shnvol','shfvol','shmvol','shduck','shthr','shrel','shfin','shfout','shframelen','shfade','shovol','shout'].map(k=>[k,$(k).value]))},wk:{week:S.week,mus:S.wmus,intro:S.wintro,psfx:S.wpsfx,loop:S.wloop,set:Object.fromEntries(['wloopat','wlooplen','waud','wpvol','wpoff','wmin','wcmin','wcmax','wsrcsel','wctx','wgreet','wbrk','wmaxc','wnvol','wfvol','wdelay','wtail','wmvol','wduck','wthr','wrel','wfin','wfout','wout'].map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]))},introVol:$('introvol').value,outroVol:$('outrovol').value,ovTz:$('ovtz').value,gmin:$('gmin').value,gmax:$('gmax').value,gsrc:$('gsrc').value,gctx:$('gctx').value,tol:$('tol').value,flash:{on:$('flashon').checked,strength:$('flashs').value,dur:$('flashd').value},fxName:S.fxName,txName:S.txName,teasers:S.teasers,auto:$('auto').checked,autosec:$('autosec').value,ovin:$('ovin').value,ovout:$('ovout').value,nparts:$('nparts').value,psnap:$('psnap').value,pall:$('pall').checked,start:$('start').value,minshot:$('minshot').value,tin:$('tin').value,tout:$('tout').value,manual:S.manual,off:[...S.off],fps:$('fps').value,W:$('W').value,H:$('H').value,ofps:$('ofps').value,enc:$('enc').value,outn:$('outn').value},null,1),'application/json');
 $('load').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;const p=JSON.parse(await f.text());
   S.m1=p.m1;S.m2=p.m2;$('m1').value=n3(p.m1);$('m2').value=n3(p.m2);$('offv').textContent=n3(p.m2-p.m1);
@@ -1990,6 +2107,7 @@ $('load').onchange=async e=>{
   if(p.mnames)S.musicName=p.mnames.musicName||'';
   if(p.intromusic){S.imName=p.intromusic.name||'';$('imname').textContent=S.imName?' '+S.imName+' – wczytaj plik ponownie':'';$('imvol').value=p.intromusic.vol;$('imfo').value=p.intromusic.fo;$('immute').checked=!!p.intromusic.mute}
   if(p.defsfx){S.defSfxName=p.defsfx.name||'';S.defSfxUrl=null;$('dsn').textContent=S.defSfxName?' '+S.defSfxName+' – wczytaj plik ponownie':'';$('dsv').value=p.defsfx.vol;$('dso').value=p.defsfx.off;$('dsa').checked=p.defsfx.auto!==false}
+  if(p.cm){S.cm.windows=p.cm.windows||[];S.cm.items=(p.cm.items||[]).map(c=>({t:+c.t,len:+c.len||0,text:c.text||'',win:c.win==null?null:c.win}));S.cmspans=[];for(const [k,v] of Object.entries(p.cm.set||{})){if($(k))$(k).value=v}$('cmduckv').textContent=$('cmduck').value;renderCm()}
   if(p.tx){S.texts=(p.tx.items||[]).map(t=>({...txNew(t.font==='inter'?'inter':'burbank'),...t}));if(p.tx.start!=null)$('txstart').value=p.tx.start;$('txall').checked=p.tx.all!==false;renderTexts()}
   if(p.split){S.split.times=(p.split.times||[]).map(x=>({t:+x.t,why:x.why||''})).filter(x=>isFinite(x.t));for(const [k,v] of Object.entries(p.split.set||{})){if($(k))$(k).value=v}renderSplit()}
   if(p.ai){S.ai.sw=aiNormalize((p.ai.sw||[]).map(s=>({t:+s.t,cam:+s.cam})).filter(s=>isFinite(s.t)&&(s.cam===1||s.cam===2)));for(const [k,v] of Object.entries(p.ai.set||{})){if($(k))$(k).value=v}S.cutMode=(p.ai.mode==='ai'&&S.ai.sw.length)?'ai':'kw';document.querySelector(`[name=cutmode][value=${S.cutMode}]`).checked=true;renderAi()}
@@ -2470,6 +2588,7 @@ function aiParts(){
   return{entries,parts};
 }
 function aiRefresh(){
+  try{cmRefresh()}catch(e){}
   const r=aiReq();
   $('aireq').innerHTML=r.items.map(([n,ok,req])=>`<div style="color:${ok?'var(--ok)':req?'var(--c2)':'var(--mut)'}">${ok?'✓':req?'✗':'•'} ${n}${!ok&&!req?' (nie wymagane, ale bez niej cięcia mogą być przesunięte)':''}</div>`).join('')+(r.ok?'':'<div class="mut" style="margin-top:4px">Uzupełnij wymagane punkty (zakładki „Pliki”, „Podgląd i markery”, „Słowa i cięcia”), żeby pobrać instrukcje.</div>');
   $('aigen').disabled=!r.ok;$('aigen').style.opacity=r.ok?1:.5;
@@ -2551,6 +2670,108 @@ $('aifill').onclick=()=>{
 };
 $('aifillundo').onclick=()=>{if(!S.ai.prev){$('aifillmsg').textContent=' Nie ma czego cofnąć.';return}S.ai.sw=S.ai.prev;S.ai.prev=null;renderAi();recompute();$('aifillmsg').textContent=' Cofnięto uzupełnienie.'};
 renderAi();
+
+// ============ Komentarz lektora w ciszy (UI) ============
+const cmDefault=()=>({windows:[],items:[]});
+function cmEntries(){const inT=tv('tin'),outT=tv('tout');return matchTranscripts(S.l1,S.l2,offset(),{inT,outT})}
+function cmReq(){
+  const inT=tv('tin'),outT=tv('tout');
+  const items=[['Montaż gotowy (filmy, zakres „od–do”)',S.segs.length>0&&outT>inT],['Transkrypcja co najmniej jednego filmu wczytana',!!((S.l1&&S.l1.length)||(S.l2&&S.l2.length))]];
+  return{items,ok:items.every(i=>i[1])};
+}
+function cmRefresh(){
+  const el=$('cmreq');if(!el)return;const r=cmReq();
+  el.innerHTML=r.items.map(([n,ok])=>`<div style="color:${ok?'var(--ok)':'var(--c2)'}">${ok?'✓':'✗'} ${n}</div>`).join('');
+  $('cmgen').disabled=!r.ok;$('cmgen').style.opacity=r.ok?1:.5;
+}
+function cmParts(){
+  const inT=tv('tin'),outT=tv('tout'),entries=cmEntries();
+  const windows=commentWindows(entries,inT,outT,{minGap:num($('cmmin').value,4),margin:num($('cmmargin').value,0.7)});
+  const ch=aiChunks(inT,outT,num($('cmchunk').value,20)*60),epLen=S.segs.reduce((a,s)=>a+s.b-s.a,0);
+  const parts=ch.map((c,i)=>({...c,idx:i+1,text:buildCommentPrompt({entries,windows,segs:S.segs,a:c.a,b:c.b,idx:i+1,total:ch.length,n1:$('ain1').value,n2:$('ain2').value,style:$('cmstyle').value,density:num($('cmdens').value,75),ctx:$('cmctx').value,epLen})}));
+  return{windows,parts,epLen};
+}
+$('cmgen').onclick=()=>{
+  if(!cmReq().ok){alert('Uzupełnij wymagane punkty na liście powyżej.');return}
+  const {windows,parts,epLen}=cmParts();
+  if(!windows.length){alert('Nie znaleziono cichych okien. Zmniejsz „min. ciszę” lub „margines”.');return}
+  S.cm.windows=windows;
+  const want=Math.round(epLen/num($('cmdens').value,75));
+  $('cmgeninfo').textContent=` ${parts.length} części · ciche okna: ${windows.length} · przewidywane komentarze: ok. ${want} (odcinek ${Math.round(epLen/60)} min)`;
+  const box=$('cmparts');box.innerHTML='';
+  const nm=pt=>`instrukcja_komentarz_${String(pt.idx).padStart(2,'0')}_z_${String(parts.length).padStart(2,'0')}.txt`;
+  parts.forEach(pt=>{const b=document.createElement('button');b.textContent=`⬇ część ${pt.idx} (${fmtHMS(pt.a)}–${fmtHMS(pt.b)})`;b.title=`${pt.text.length.toLocaleString('pl-PL')} znaków`;b.onclick=()=>dl(nm(pt),pt.text);box.appendChild(b)});
+  parts.forEach((pt,i)=>setTimeout(()=>dl(nm(pt),pt.text),i*400));
+};
+const cmEst=t=>wordsNoTags(t)/2.3;
+function renderCm(){
+  const tb=$('cmtab');tb.innerHTML='<tr><th>#</th><th>czas</th><th>okno (s)</th><th>mowa (s)</th><th>tekst (z tagami)</th><th></th><th></th></tr>';
+  S.cm.items.forEach((c,i)=>{
+    const sp=S.cmspans[i],dur=sp?sp.e-sp.s:cmEst(c.text),bad=c.len>0&&dur>c.len+0.4;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td><input type="text" class="ct" style="width:90px"></td><td class="mono">${c.len?c.len.toFixed(1):'—'}</td><td class="mono" style="color:${bad?'var(--c2)':'inherit'}" title="${bad?'komentarz dłuższy niż ciche okno: może nachodzić na głosy':''}">${dur.toFixed(1)}${sp?'':'~'}${bad?' ⚠':''}</td><td><textarea class="cx" style="width:min(520px,50vw);height:50px"></textarea></td><td><button class="cp">▶</button></td><td><button class="cd">✕</button></td>`;
+    const ct=tr.querySelector('.ct'),cx=tr.querySelector('.cx');ct.value=fmtHMS(c.t);cx.value=c.text;
+    ct.onchange=()=>{c.t=parseTime(ct.value);S.cm.items.sort((a,b)=>a.t-b.t);S.cmspans=[];renderCm();recompute()};
+    cx.oninput=()=>{c.text=cx.value;S.cmspans=[];cmInfo()};
+    tr.querySelector('.cp').onclick=()=>previewRange(Math.max(0,c.t-4),c.t+Math.max(4,dur)+2,false);
+    tr.querySelector('.cd').onclick=()=>{S.cm.items.splice(i,1);S.cmspans=[];renderCm();recompute()};
+    tb.appendChild(tr);
+  });
+  cmInfo();
+}
+function cmInfo(){
+  const el=$('cminfo');if(!el)return;const n=S.cm.items.length,epLen=S.segs.reduce((a,s)=>a+s.b-s.a,0);
+  el.textContent=n?` ${n} komentarzy · średnio co ${epLen?Math.round(epLen/n):'—'} s`+(S.cmspans.length===n?' · nagranie wczytane':' · wczytaj nagranie lektora, żeby komentarz trafił do renderu'):' brak komentarzy';
+}
+function addCmText(txt){
+  const list=parseCommentJson(txt,S.cm.windows),by=new Map(S.cm.items.map(x=>[x.win!=null?'w'+x.win+'@'+x.t.toFixed(1):'t'+x.t.toFixed(1),x]));
+  list.forEach(x=>by.set(x.win!=null?'w'+x.win+'@'+x.t.toFixed(1):'t'+x.t.toFixed(1),x));
+  S.cm.items=[...by.values()].sort((a,b)=>a.t-b.t);S.cmspans=[];renderCm();recompute();return list.length;
+}
+$('cmin').onchange=async e=>{
+  const fl=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})),msgs=[];let n=0;
+  for(const f of fl){try{n+=addCmText(await f.text())}catch(err){msgs.push(`${f.name}: ${err.message}`)}}
+  $('cmmsg').textContent=` Dodano komentarzy: ${n} z ${fl.length} plików.`+(msgs.length?' Błędy: '+msgs.join('; '):'');e.target.value='';
+};
+$('cmload').onclick=()=>{try{const n=addCmText($('cmpaste').value);$('cmpaste').value='';$('cmmsg').textContent=` Dodano komentarzy: ${n}.`}catch(err){$('cmmsg').textContent=' Nie udało się wczytać: '+err.message}};
+$('cmclear').onclick=()=>{S.cm.items=[];S.cmspans=[];renderCm();recompute();$('cmmsg').textContent=' Komentarze wyczyszczone.'};
+$('cmadd').onclick=()=>{S.cm.items.push({t:tv('tin')+10,len:0,text:'',win:null});S.cm.items.sort((a,b)=>a.t-b.t);S.cmspans=[];renderCm()};
+const cmNarFiles=()=>buildNarrationFiles(S.cm.items.map(x=>x.text.trim()).filter(Boolean),{maxChars:num($('cmmaxc').value,4500),sepTag:'[pause]'});
+$('cmtxt').onclick=()=>{
+  if(!S.cm.items.length){alert('Brak komentarzy. Wczytaj odpowiedź ChatGPT lub dodaj komentarze.');return}
+  const fs=cmNarFiles();fs.forEach((f,i)=>dl(fs.length>1?`lektor_komentarz_${String(i+1).padStart(2,'0')}.txt`:'lektor_komentarz.txt',f.text));
+  $('cmtxtinfo').textContent=` ${fs.length} ${fs.length===1?'plik':'plików'} (fraz: ${fs.map(f=>f.count).join(', ')}), oddzielone [pause]`;
+};
+$('cmnar').onchange=async e=>{
+  const fl=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  S.cmfiles=[];S.cmspans=[];
+  if(!fl.length){$('cmnari').textContent='';renderCm();return}
+  $('cmnari').textContent=' analizuję…';
+  try{
+    const items=S.cm.items,words=items.map(x=>wordsNoTags(x.text)),gen=cmNarFiles(),ens=[];
+    if(!items.length)throw new Error('najpierw wczytaj komentarze (odpowiedź ChatGPT)');
+    for(const f of fl)ens.push(await envOf(f));
+    if(fl.length!==1&&fl.length!==gen.length)throw new Error(`wczytano ${fl.length} plików, a tekst ma ${gen.length}: wczytaj 1 plik albo ${gen.length}`);
+    const spans=[],msg=[],clampSp=(s,x)=>({s:Math.max(0,s.s-0.05),e:Math.min(x.dur,s.e+0.1)});
+    if(fl.length===1){
+      const r=splitDurations(ens[0].env,ens[0].hop,ens[0].dur,items.length,words);
+      r.spans.forEach(s=>spans.push({f:0,...clampSp(s,ens[0])}));
+      msg.push(r.exact?`wykryto fraz: ${items.length}, przerwy: ${r.gaps.slice(0,6).join(', ')}${r.gaps.length>6?'…':''} s`:'za mało wykrytych przerw: podział wg liczby słów, sprawdź czasy (przy generowaniu użyj dłuższego [pause])');
+    }else{
+      let k0=0;ens.forEach((x,i)=>{const c=gen[i].count,r=splitDurations(x.env,x.hop,x.dur,c,words.slice(k0,k0+c));r.spans.forEach(s=>spans.push({f:i,...clampSp(s,x)}));k0+=c;if(!r.exact)msg.push(`plik ${i+1}: za mało przerw`)});
+    }
+    S.cmfiles=fl.map((f,i)=>({name:f.name,dur:ens[i].dur}));S.cmspans=spans;
+    $('cmnari').textContent=` ${fl.map(f=>f.name).join(', ')} · ${fmt(S.cmfiles.reduce((a,f)=>a+f.dur,0))} · ${msg.join('; ')}`;
+  }catch(err){$('cmnari').textContent=' Nie udało się: '+err.message}
+  renderCm();recompute();
+};
+$('cmduck').addEventListener('input',()=>{$('cmduckv').textContent=$('cmduck').value;recompute()});$('cmvol').addEventListener('input',recompute);
+function cmOpts(){
+  const it=S.cm.items;if(!it.length||S.cmspans.length!==it.length||!S.cmfiles.length)return null;
+  return{items:it.map((c,i)=>({t:c.t,f:S.cmspans[i].f,s:S.cmspans[i].s,dur:S.cmspans[i].e-S.cmspans[i].s})),narr:S.cmfiles.map(f=>({name:f.name})),vol:num($('cmvol').value,100),duck:{thr:50,strength:num($('cmduck').value,60),attack:40,release:500}};
+}
+['cmmin','cmmargin','cmdens','cmchunk','cmstyle','cmctx'].forEach(id=>$(id).addEventListener('input',cmRefresh));
+renderCm();cmRefresh();
 
 S.shorts=[];S.shspans=[];S.shfiles=[];S.shmus='';S.shframe='';S.shoutro='';
 const shFlat=()=>{const a=[];S.shorts.forEach((sh,si)=>sh.lines.forEach((l,li)=>a.push({sh,si,l,li})));return a};
