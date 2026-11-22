@@ -2713,7 +2713,7 @@ function renderCm(){
     const ct=tr.querySelector('.ct'),cx=tr.querySelector('.cx');ct.value=fmtHMS(c.t);cx.value=c.text;
     ct.onchange=()=>{c.t=parseTime(ct.value);S.cm.items.sort((a,b)=>a.t-b.t);S.cmspans=[];renderCm();recompute()};
     cx.oninput=()=>{c.text=cx.value;S.cmspans=[];cmInfo()};
-    tr.querySelector('.cp').onclick=()=>previewRange(Math.max(0,c.t-4),c.t+Math.max(4,dur)+2,false);
+    tr.querySelector('.cp').onclick=()=>cmPreview(i);
     tr.querySelector('.cd').onclick=()=>{S.cm.items.splice(i,1);S.cmspans=[];renderCm();recompute()};
     tb.appendChild(tr);
   });
@@ -2744,7 +2744,7 @@ $('cmtxt').onclick=()=>{
 };
 $('cmnar').onchange=async e=>{
   const fl=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-  S.cmfiles=[];S.cmspans=[];
+  S.cmfiles=[];S.cmspans=[];S.cmbufs=[];
   if(!fl.length){$('cmnari').textContent='';renderCm();return}
   $('cmnari').textContent=' analizuję…';
   try{
@@ -2760,7 +2760,7 @@ $('cmnar').onchange=async e=>{
     }else{
       let k0=0;ens.forEach((x,i)=>{const c=gen[i].count,r=splitDurations(x.env,x.hop,x.dur,c,words.slice(k0,k0+c));r.spans.forEach(s=>spans.push({f:i,...clampSp(s,x)}));k0+=c;if(!r.exact)msg.push(`plik ${i+1}: za mało przerw`)});
     }
-    S.cmfiles=fl.map((f,i)=>({name:f.name,dur:ens[i].dur}));S.cmspans=spans;
+    S.cmfiles=fl.map((f,i)=>({name:f.name,dur:ens[i].dur}));S.cmspans=spans;S.cmbufs=ens.map(x=>x.buf);
     $('cmnari').textContent=` ${fl.map(f=>f.name).join(', ')} · ${fmt(S.cmfiles.reduce((a,f)=>a+f.dur,0))} · ${msg.join('; ')}`;
   }catch(err){$('cmnari').textContent=' Nie udało się: '+err.message}
   renderCm();recompute();
@@ -2771,6 +2771,38 @@ function cmOpts(){
   return{items:it.map((c,i)=>({t:c.t,f:S.cmspans[i].f,s:S.cmspans[i].s,dur:S.cmspans[i].e-S.cmspans[i].s})),narr:S.cmfiles.map(f=>({name:f.name})),vol:num($('cmvol').value,100),duck:{thr:50,strength:num($('cmduck').value,60),attack:40,release:500}};
 }
 ['cmmin','cmmargin','cmdens','cmchunk','cmstyle','cmctx'].forEach(id=>$(id).addEventListener('input',cmRefresh));
+
+// odsłuch komentarza w programie: fragment filmu z nagraniem lektora i przyciszaniem dźwięku z gry (bez efektów z renderu)
+let cmRaf=0;
+function cmStopAudio(){cancelAnimationFrame(cmRaf);(S.cmsrcs||[]).forEach(s=>{try{s.stop()}catch(e){}});S.cmsrcs=[];v1.volume=v2.volume=1}
+async function cmPreview(i){
+  const c=S.cm.items[i];if(!c)return;
+  const sp=S.cmspans[i],haveAudio=!!(sp&&S.cmbufs&&S.cmbufs.length),dur=sp?sp.e-sp.s:cmEst(c.text);
+  cmStopAudio();
+  const a=Math.max(0,c.t-4),b=c.t+Math.max(2,dur)+2.5;
+  previewRange(a,b,false);
+  if(!haveAudio){$('cmmsg').textContent=' Odsłuch bez głosu: wczytaj nagranie lektora (pole „Nagranie lektora”).';return}
+  if(!S.shac){const AC=window.AudioContext||window.webkitAudioContext;S.shac=new AC()}
+  try{await S.shac.resume()}catch(e){}
+  const ac=S.shac,factor=Math.max(0.05,1-0.8*num($('cmduck').value,60)/100),gain=Math.min(2,num($('cmvol').value,100)/100);
+  S.cmsrcs=[];const pending=S.cm.items.map((x,k)=>({x,k,sp:S.cmspans[k],done:false})).filter(o=>o.sp&&S.cmbufs[o.sp.f]&&o.x.t>=a-0.1&&o.x.t<b);
+  const tick=()=>{
+    if(!S.playing){cmStopAudio();return}
+    const t=v1.currentTime;let duck=false;
+    for(const o of pending){
+      const d=o.sp.e-o.sp.s;
+      if(!o.done&&t>=o.x.t-0.03&&t<o.x.t+d){
+        o.done=true;const src=ac.createBufferSource(),g=ac.createGain();src.buffer=S.cmbufs[o.sp.f];g.gain.value=gain;src.connect(g).connect(ac.destination);
+        const late=Math.max(0,t-o.x.t);src.start(0,o.sp.s+late,Math.max(0.1,d-late));S.cmsrcs.push(src);
+      }
+      if(t>=o.x.t-0.05&&t<o.x.t+d+0.2)duck=true;
+    }
+    v1.volume=v2.volume=duck?factor:1;
+    cmRaf=requestAnimationFrame(tick);
+  };
+  tick();
+  $('cmmsg').textContent=' Odsłuch: film z komentarzem (bez błysku, dźwięków cięć i muzyki z renderu).';
+}
 renderCm();cmRefresh();
 
 S.shorts=[];S.shspans=[];S.shfiles=[];S.shmus='';S.shframe='';S.shoutro='';

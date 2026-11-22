@@ -228,6 +228,8 @@ Na dole zakładki „Montaż AI”, sekcja „5. Komentarz lektora w ciszy”. D
 4. **Tekst dla ElevenLabs:** frazy oddzielone linią `[pause]` (dzielony na pliki po ok. 4500 znaków).
 5. **Nagranie lektora** (jeden plik albo tyle, ile pobrałeś): program wykrywa przerwy po `[pause]`, przypisuje frazy do komentarzy i w renderze wstawia każdą w jej chwili (po przesunięciu o intro i zajawkę oraz o początek części). Dźwięk z gry jest przyciszany pod komentarzem (siła w polu). Komentarz trafia tylko do głównego montażu, nie do zajawki, intro, momentów i shortów.
 
+**Odsłuch w programie:** po wczytaniu nagrania lektora przycisk „▶” przy komentarzu odtwarza film od 4 s przed komentarzem razem z nagraniem (wszystkie komentarze z tego fragmentu), a dźwięk z gry jest przyciszany jak w renderze (siła z pola „przyciszanie”). Odsłuch nie zawiera błysku, dźwięków cięć ani muzyki z renderu.
+
 Jeśli program wykryje za mało przerw, sprawdź w ElevenLabs dłuższe `[pause]` (np. dwa razy). Do głosu użyj ogólnego głosu, nie klonu głosu prawdziwej osoby.
 
 ### Zakładki
